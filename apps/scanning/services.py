@@ -1,0 +1,117 @@
+"""Scan ingestion service.
+
+`ingest_scan` is the single entry point: validate -> persist ScanSession ->
+update Asset hot fields and rebuild NIC/Disk state. Idempotent on
+(agent, client_scan_id) so agent retries don't create duplicates.
+"""
+from __future__ import annotations
+
+import time
+from typing import Optional
+
+from django.db import transaction
+from django.utils import timezone
+
+from apps.agents.models import Agent
+from apps.assets.models import Asset, Disk, NetworkInterface
+from apps.scanning.models import ScanSession
+from apps.scanning.schemas import ScanPayload
+
+
+@transaction.atomic
+def ingest_scan(
+    *, agent: Agent, raw_payload: dict, source: Optional[str] = None,
+) -> ScanSession:
+    started = time.monotonic()
+    payload = ScanPayload.model_validate(raw_payload)
+    source = source or payload.source
+
+    existing = ScanSession.objects.filter(
+        agent=agent, client_scan_id=payload.scan_id,
+    ).first()
+    if existing is not None:
+        return existing
+
+    payload_dict = payload.model_dump(mode="json")
+    payload_hash = ScanSession.compute_payload_hash(payload_dict)
+
+    session = ScanSession(
+        agent=agent,
+        asset=agent.asset,
+        client_scan_id=payload.scan_id,
+        started_at=payload.started_at,
+        finished_at=payload.finished_at,
+        agent_version=payload.agent_version,
+        source=source,
+        payload=payload_dict,
+        payload_hash=payload_hash,
+    )
+
+    _apply_to_asset(agent.asset, payload)
+
+    session.ingest_duration_ms = int((time.monotonic() - started) * 1000)
+    session.save()
+    return session
+
+
+def _apply_to_asset(asset: Asset, payload: ScanPayload) -> None:
+    asset.hostname = payload.system.hostname or asset.hostname
+    asset.fqdn = payload.system.fqdn or asset.fqdn
+    asset.current_user_login = payload.system.current_user
+    if payload.system.last_logged_user:
+        asset.last_logged_user = payload.system.last_logged_user
+
+    asset.os_name = payload.os.name
+    asset.os_version = payload.os.version
+    asset.os_build = payload.os.build
+    asset.os_arch = payload.os.arch
+
+    if payload.hardware.manufacturer:
+        asset.manufacturer = payload.hardware.manufacturer
+    if payload.hardware.model:
+        asset.model = payload.hardware.model
+    if payload.hardware.serial_number:
+        asset.serial_number = payload.hardware.serial_number
+    asset.cpu_model = payload.hardware.cpu.model
+    asset.cpu_cores = payload.hardware.cpu.cores
+    asset.ram_total_mb = payload.hardware.ram_total_mb
+    asset.motherboard = payload.hardware.motherboard
+    asset.gpu = payload.hardware.gpu
+
+    asset.agent_version = payload.agent_version
+    now = timezone.now()
+    asset.last_seen_at = now
+    if asset.first_seen_at is None:
+        asset.first_seen_at = now
+    asset.status = Asset.Status.ONLINE
+    asset.save()
+
+    # Network interfaces — replace state
+    asset.network_interfaces.all().delete()
+    if payload.network.interfaces:
+        NetworkInterface.objects.bulk_create([
+            NetworkInterface(
+                asset=asset,
+                name=nic.name,
+                mac_address=nic.mac_address,
+                ip_addresses=nic.ip_addresses,
+                is_primary=nic.is_primary,
+            )
+            for nic in payload.network.interfaces
+        ])
+
+    # Disks — replace state
+    asset.disks.all().delete()
+    if payload.storage.disks:
+        Disk.objects.bulk_create([
+            Disk(
+                asset=asset,
+                device=d.device,
+                model=d.model,
+                size_bytes=d.size_bytes,
+                free_bytes=d.free_bytes,
+                fs_type=d.fs_type,
+                mount_point=d.mount_point,
+            )
+            for d in payload.storage.disks
+        ])

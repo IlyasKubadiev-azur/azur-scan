@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.azurscan.agent</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/azurscan/bin/azurscan-agent</string>
+        <string>run</string>
+    </array>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>ThrottleInterval</key>
+    <integer>30</integer>
+
+    <key>StandardOutPath</key>
+    <string>/Library/Logs/AzurScan/service.out.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Library/Logs/AzurScan/service.err.log</string>
+
+    <key>UserName</key>
+    <string>root</string>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+
+    <!-- Throttle resource use; this is a low-priority background daemon -->
+    <key>Nice</key>
+    <integer>10</integer>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/azurscan/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+</dict>
+</plist>

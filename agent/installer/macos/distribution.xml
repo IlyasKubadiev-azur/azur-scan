@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<installer-gui-script minSpecVersion="2">
+    <title>Azur-Scan Agent</title>
+    <organization>com.azurscan</organization>
+    <domains enable_localSystem="true"/>
+    <options customize="never" require-scripts="false" hostArchitectures="x86_64,arm64"/>
+
+    <!-- macOS 11+ minimum -->
+    <volume-check>
+        <allowed-os-versions>
+            <os-version min="11.0"/>
+        </allowed-os-versions>
+    </volume-check>
+
+    <welcome    file="welcome.html"    mime-type="text/html"/>
+    <conclusion file="conclusion.html" mime-type="text/html"/>
+
+    <choices-outline>
+        <line choice="default">
+            <line choice="com.azurscan.agent"/>
+        </line>
+    </choices-outline>
+
+    <choice id="default"/>
+    <choice id="com.azurscan.agent" visible="false">
+        <pkg-ref id="com.azurscan.agent"/>
+    </choice>
+
+    <pkg-ref id="com.azurscan.agent"
+             version="0.1.0"
+             onConclusion="none">azurscan-agent-component.pkg</pkg-ref>
+</installer-gui-script>

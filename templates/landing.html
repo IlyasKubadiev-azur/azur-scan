@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="{{ current_lang }}" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Azur-Scan · {{ t.subtitle }}</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='2' y='3' width='20' height='14' rx='2' fill='%233b82f6'/%3E%3Cpath d='M8 21h8M12 17v4' stroke='%233b82f6' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E">
+  <style>
+    :root,
+    html[data-theme="dark"] {
+      --bg: #0b1120;
+      --bg-grad: radial-gradient(circle at 20% 0%, #1e293b 0%, #0b1120 50%);
+      --panel: rgba(30, 41, 59, 0.6);
+      --panel-hover: rgba(51, 65, 85, 0.85);
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #3b82f6;
+      --accent-2: #60a5fa;
+      --accent-glow: rgba(59, 130, 246, 0.35);
+      --border: rgba(148, 163, 184, 0.15);
+      --border-hover: rgba(96, 165, 250, 0.55);
+      --pill-bg: rgba(34, 197, 94, 0.18);
+      --pill-fg: #4ade80;
+      --shadow-card: 0 1px 2px rgba(0,0,0,0.2);
+      --shadow-hover: 0 16px 40px -12px rgba(59, 130, 246, 0.25);
+      --logo-shadow: 0 8px 28px rgba(59, 130, 246, 0.45);
+      --switch-bg: rgba(30, 41, 59, 0.7);
+      --switch-border: rgba(148, 163, 184, 0.2);
+    }
+    html[data-theme="light"] {
+      --bg: #f8fafc;
+      --bg-grad: radial-gradient(circle at 20% 0%, #e0e7ff 0%, #f8fafc 55%);
+      --panel: rgba(255, 255, 255, 0.85);
+      --panel-hover: #ffffff;
+      --text: #0f172a;
+      --muted: #475569;
+      --accent: #2563eb;
+      --accent-2: #1d4ed8;
+      --accent-glow: rgba(37, 99, 235, 0.18);
+      --border: rgba(15, 23, 42, 0.08);
+      --border-hover: rgba(37, 99, 235, 0.45);
+      --pill-bg: rgba(22, 163, 74, 0.12);
+      --pill-fg: #15803d;
+      --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.05);
+      --shadow-hover: 0 16px 40px -12px rgba(37, 99, 235, 0.25);
+      --logo-shadow: 0 8px 28px rgba(37, 99, 235, 0.3);
+      --switch-bg: rgba(255, 255, 255, 0.85);
+      --switch-border: rgba(15, 23, 42, 0.1);
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                   "Helvetica Neue", Arial, sans-serif;
+      min-height: 100vh;
+      transition: background 0.3s ease, color 0.3s ease;
+    }
+    body {
+      background: var(--bg-grad);
+      background-attachment: fixed;
+    }
+
+    /* ---------- top toolbar (theme + language) ---------- */
+    .toolbar {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      display: flex;
+      gap: 8px;
+      z-index: 100;
+    }
+    .switch {
+      background: var(--switch-bg);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--switch-border);
+      border-radius: 999px;
+      padding: 4px;
+      display: flex;
+      align-items: center;
+      box-shadow: var(--shadow-card);
+    }
+    .switch button {
+      background: transparent;
+      border: 0;
+      color: var(--muted);
+      padding: 6px 12px;
+      border-radius: 999px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      transition: all 0.2s ease;
+      font-family: inherit;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .switch button:hover { color: var(--text); }
+    .switch button.active {
+      background: var(--accent);
+      color: white;
+      box-shadow: 0 2px 8px var(--accent-glow);
+    }
+    .switch button svg {
+      width: 16px; height: 16px;
+      transition: transform 0.4s ease;
+    }
+    .switch button.active svg {
+      transform: rotate(360deg);
+    }
+
+    /* ---------- main layout ---------- */
+    .wrap {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 80px 24px 64px;
+      animation: fadeIn 0.5s ease-out;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes pulse {
+      0%, 100% { box-shadow: var(--logo-shadow); }
+      50% { box-shadow: 0 8px 32px var(--accent-glow), 0 0 0 6px var(--accent-glow); }
+    }
+
+    header {
+      display: flex; align-items: center; gap: 16px;
+      margin-bottom: 56px;
+      animation: slideUp 0.6s ease-out;
+    }
+    .logo {
+      width: 52px; height: 52px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
+      display: grid; place-items: center;
+      box-shadow: var(--logo-shadow);
+      animation: pulse 4s ease-in-out infinite;
+    }
+    .logo svg { width: 30px; height: 30px; color: white; }
+    h1 {
+      margin: 0;
+      font-size: 30px;
+      letter-spacing: -0.025em;
+      font-weight: 700;
+    }
+    .sub { color: var(--muted); font-size: 14px; margin-top: 2px; }
+
+    .lede {
+      max-width: 700px;
+      color: var(--muted);
+      line-height: 1.7;
+      margin: 0 0 48px 0;
+      font-size: 16px;
+      animation: slideUp 0.7s ease-out;
+    }
+
+    /* ---------- card grid ---------- */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+    }
+    .card {
+      background: var(--panel);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 24px;
+      text-decoration: none;
+      color: inherit;
+      transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+                  border-color 0.25s, background 0.25s, box-shadow 0.25s;
+      display: flex; flex-direction: column; gap: 8px;
+      box-shadow: var(--shadow-card);
+      opacity: 0;
+      animation: slideUp 0.5s ease-out forwards;
+      position: relative;
+      overflow: hidden;
+    }
+    .card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at var(--mouse-x, 50%) var(--mouse-y, 50%),
+                                  var(--accent-glow), transparent 40%);
+      opacity: 0;
+      transition: opacity 0.25s;
+      pointer-events: none;
+    }
+    .card:hover::before { opacity: 1; }
+    .card:hover {
+      transform: translateY(-4px);
+      border-color: var(--border-hover);
+      background: var(--panel-hover);
+      box-shadow: var(--shadow-hover);
+    }
+    /* stagger appearance */
+    .card:nth-child(1) { animation-delay: 0.05s; }
+    .card:nth-child(2) { animation-delay: 0.10s; }
+    .card:nth-child(3) { animation-delay: 0.15s; }
+    .card:nth-child(4) { animation-delay: 0.20s; }
+    .card:nth-child(5) { animation-delay: 0.25s; }
+
+    .card-icon {
+      width: 40px; height: 40px;
+      border-radius: 11px;
+      background: linear-gradient(135deg, var(--accent-glow), transparent);
+      border: 1px solid var(--border);
+      display: grid; place-items: center;
+      margin-bottom: 8px;
+      transition: transform 0.3s ease;
+    }
+    .card:hover .card-icon { transform: scale(1.08) rotate(-3deg); }
+    .card-icon svg { width: 22px; height: 22px; color: var(--accent-2); }
+    .card-title { font-weight: 600; font-size: 16px; }
+    .card-desc {
+      color: var(--muted);
+      font-size: 13.5px;
+      line-height: 1.55;
+    }
+    .card-url {
+      color: var(--accent-2);
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 12px;
+      margin-top: auto;
+      padding-top: 12px;
+      letter-spacing: 0.3px;
+    }
+
+    /* ---------- footer ---------- */
+    footer {
+      margin-top: 64px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 13px;
+      display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+      animation: slideUp 0.8s ease-out;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 2px 10px;
+      border-radius: 999px;
+      background: var(--pill-bg);
+      color: var(--pill-fg);
+      font-size: 12px;
+      font-family: ui-monospace, monospace;
+      font-weight: 500;
+    }
+    .pill::before {
+      content: "";
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+      animation: blink 2s ease-in-out infinite;
+    }
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    @media (max-width: 600px) {
+      .wrap { padding: 90px 16px 40px; }
+      h1 { font-size: 24px; }
+      .toolbar { top: 12px; right: 12px; }
+      .switch button { padding: 5px 10px; font-size: 12px; }
+    }
+
+    /* hide language form (we use it via JS submit) */
+    .lang-form { display: none; }
+  </style>
+</head>
+<body>
+
+  <!-- Theme + language toolbar -->
+  <div class="toolbar">
+    <div class="switch" role="group" aria-label="{{ t.theme_label }}">
+      <button type="button" data-theme="light" aria-label="Light theme">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="4"/>
+          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+        </svg>
+      </button>
+      <button type="button" data-theme="dark" aria-label="Dark theme">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
+      </button>
+    </div>
+    <div class="switch" role="group" aria-label="{{ t.language_label }}">
+      <button type="button" data-lang="en" {% if current_lang == 'en' %}class="active"{% endif %}>EN</button>
+      <button type="button" data-lang="ru" {% if current_lang == 'ru' %}class="active"{% endif %}>RU</button>
+    </div>
+  </div>
+
+  <!-- Hidden form to POST language change to Django -->
+  <form class="lang-form" id="lang-form" action="/i18n/setlang/" method="post">
+    {% csrf_token %}
+    <input type="hidden" name="language" id="lang-input" value="{{ current_lang }}">
+    <input type="hidden" name="next" value="/">
+  </form>
+
+  <div class="wrap">
+    <header>
+      <div class="logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+             stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="3" width="20" height="14" rx="2"/>
+          <path d="M8 21h8M12 17v4"/>
+        </svg>
+      </div>
+      <div>
+        <h1>Azur-Scan</h1>
+        <div class="sub">{{ t.subtitle }}</div>
+      </div>
+    </header>
+
+    <p class="lede">{{ t.lede }}</p>
+
+    <div class="grid">
+      <a class="card" href="/admin/">
+        <div class="card-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2l8 4v6c0 5-3.5 9-8 10-4.5-1-8-5-8-10V6l8-4z"/>
+          </svg>
+        </div>
+        <div class="card-title">{{ t.admin_title }}</div>
+        <div class="card-desc">{{ t.admin_desc }}</div>
+        <div class="card-url">/admin/</div>
+      </a>
+
+      <a class="card" href="/api/docs/">
+        <div class="card-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round">
+            <path d="M16 18l6-6-6-6M8 6l-6 6 6 6"/>
+          </svg>
+        </div>
+        <div class="card-title">{{ t.docs_title }}</div>
+        <div class="card-desc">{{ t.docs_desc }}</div>
+        <div class="card-url">/api/docs/</div>
+      </a>
+
+      <a class="card" href="/api/v1/">
+        <div class="card-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M2 12h20M12 2c2.5 3 4 6.5 4 10s-1.5 7-4 10c-2.5-3-4-6.5-4-10s1.5-7 4-10z"/>
+          </svg>
+        </div>
+        <div class="card-title">{{ t.api_title }}</div>
+        <div class="card-desc">{{ t.api_desc }}</div>
+        <div class="card-url">/api/v1/</div>
+      </a>
+
+      <a class="card" href="/api/schema/">
+        <div class="card-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/>
+          </svg>
+        </div>
+        <div class="card-title">{{ t.schema_title }}</div>
+        <div class="card-desc">{{ t.schema_desc }}</div>
+        <div class="card-url">/api/schema/</div>
+      </a>
+
+      <a class="card" href="/healthz">
+        <div class="card-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+          </svg>
+        </div>
+        <div class="card-title">{{ t.health_title }}</div>
+        <div class="card-desc">{{ t.health_desc }}</div>
+        <div class="card-url">/healthz</div>
+      </a>
+    </div>
+
+    <footer>
+      <div>
+        Status: <span class="pill">{{ t.status_running }}</span>
+        {% if user_authenticated %}
+          · {{ t.signed_in_as }} <strong>{{ request.user.username }}</strong>
+        {% endif %}
+      </div>
+      <div>{{ t.tagline }}</div>
+    </footer>
+  </div>
+
+  <script>
+    // ---------- Theme handling ----------
+    (function () {
+      const root = document.documentElement;
+      const stored = localStorage.getItem("azurscan-theme");
+      const initial = stored || (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+      root.dataset.theme = initial;
+
+      const themeButtons = document.querySelectorAll(".switch [data-theme]");
+      function refresh() {
+        themeButtons.forEach(b => b.classList.toggle("active", b.dataset.theme === root.dataset.theme));
+      }
+      refresh();
+
+      themeButtons.forEach(btn => {
+        btn.addEventListener("click", () => {
+          root.dataset.theme = btn.dataset.theme;
+          localStorage.setItem("azurscan-theme", btn.dataset.theme);
+          refresh();
+        });
+      });
+    })();
+
+    // ---------- Language handling ----------
+    (function () {
+      const langButtons = document.querySelectorAll(".switch [data-lang]");
+      const form = document.getElementById("lang-form");
+      const input = document.getElementById("lang-input");
+      langButtons.forEach(btn => {
+        btn.addEventListener("click", () => {
+          const lang = btn.dataset.lang;
+          if (lang === "{{ current_lang }}") return;
+          input.value = lang;
+          form.submit();
+        });
+      });
+    })();
+
+    // ---------- Card hover spotlight ----------
+    document.querySelectorAll(".card").forEach(card => {
+      card.addEventListener("mousemove", e => {
+        const r = card.getBoundingClientRect();
+        card.style.setProperty("--mouse-x", `${e.clientX - r.left}px`);
+        card.style.setProperty("--mouse-y", `${e.clientY - r.top}px`);
+      });
+    });
+  </script>
+</body>
+</html>

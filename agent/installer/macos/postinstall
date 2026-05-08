@@ -1,0 +1,41 @@
+#!/bin/bash
+# Post-install script for the Azur-Scan Agent .pkg.
+#
+# Runs as root. Installs the LaunchDaemon plist and starts the service.
+
+set -euo pipefail
+
+PLIST_SRC="/Library/LaunchDaemons/com.azurscan.agent.plist"
+LOG_DIR="/Library/Logs/AzurScan"
+DATA_DIR="/Library/Application Support/AzurScan"
+
+# Ensure log + data directories exist with correct ownership
+mkdir -p "$LOG_DIR" "$DATA_DIR"
+chown -R root:wheel "$LOG_DIR" "$DATA_DIR"
+chmod 750 "$LOG_DIR" "$DATA_DIR"
+
+# Plist must be owned by root:wheel and 0644 — launchd refuses otherwise
+if [ -f "$PLIST_SRC" ]; then
+    chown root:wheel "$PLIST_SRC"
+    chmod 644 "$PLIST_SRC"
+fi
+
+# Make the binary executable (pkgbuild preserves bits, but be defensive)
+chmod 755 /usr/local/azurscan/bin/azurscan-agent
+
+# Unload first if the daemon is already loaded (e.g., upgrade install)
+launchctl bootout system "$PLIST_SRC" 2>/dev/null || true
+
+# Load and start
+launchctl bootstrap system "$PLIST_SRC"
+launchctl enable system/com.azurscan.agent
+launchctl kickstart -k system/com.azurscan.agent
+
+echo "Azur-Scan Agent installed and started."
+echo "Enroll with:"
+echo "  sudo /usr/local/azurscan/bin/azurscan-agent enroll \\"
+echo "       --server https://api.example.com \\"
+echo "       --token evt_xxxxxxxxxxxx"
+echo "  sudo launchctl kickstart -k system/com.azurscan.agent"
+
+exit 0

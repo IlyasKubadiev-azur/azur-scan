@@ -1,0 +1,15 @@
+<service>
+  <id>AzurScanAgent</id>
+  <name>Azur-Scan Agent</name>
+  <description>Azur-Scan IT asset inventory agent</description>
+  <executable>%BASE%\azurscan-agent.exe</executable>
+  <arguments>run</arguments>
+  <startmode>Automatic</startmode>
+  <logmode>roll-by-size</logmode>
+  <logpath>C:\ProgramData\AzurScan\logs</logpath>
+  <sizeThreshold>10240</sizeThreshold>
+  <keepFiles>5</keepFiles>
+  <onfailure action="restart" delay="30 sec"/>
+  <onfailure action="restart" delay="60 sec"/>
+  <onfailure action="none"/>
+</service>

@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "azurscan-agent"
+version = "0.1.0"
+description = "Azur-Scan endpoint agent."
+requires-python = ">=3.12"
+
+dependencies = [
+  "httpx>=0.27,<1.0",
+  "pydantic>=2.10,<3.0",
+  "pydantic-settings>=2.7,<3.0",
+  "PyYAML>=6.0,<7.0",
+  "psutil>=6.0",
+  "click>=8.1,<9.0",
+  "ulid-py>=1.1,<2.0",
+  "tenacity>=9.0",
+]
+
+[project.optional-dependencies]
+windows = ["pywin32>=308", "wmi>=1.5"]
+build   = ["pyinstaller>=6.5", "pyinstaller-hooks-contrib>=2024.9"]
+
+[project.scripts]
+azurscan-agent = "azurscan_agent.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["azurscan_agent*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"

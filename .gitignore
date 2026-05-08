@@ -1,0 +1,64 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Virtual env
+.venv/
+venv/
+env/
+
+# Django
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+media/
+staticfiles/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Claude Code per-user settings
+.claude/settings.local.json
+
+# Bundled installer artifacts that are downloaded/built, not source
+agent/installer/windows/azurscan-service.exe
+agent/installer/windows/nssm.exe
+*.wixpdb
+*.msi
+*.dmg
+*.pkg
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Coverage
+.coverage
+htmlcov/
+coverage.xml
+
+# Celery
+celerybeat-schedule
+celerybeat.pid

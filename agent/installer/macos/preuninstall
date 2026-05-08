@@ -1,0 +1,27 @@
+#!/bin/bash
+# Pre-uninstall hook (invoked manually — macOS .pkg has no native uninstall).
+# Run this before deleting the install root if you want to fully remove the
+# service and its credentials.
+
+set -euo pipefail
+
+PLIST="/Library/LaunchDaemons/com.azurscan.agent.plist"
+
+if [ -f "$PLIST" ]; then
+    launchctl bootout system "$PLIST" 2>/dev/null || true
+    rm -f "$PLIST"
+fi
+
+# Clear keychain credentials (best-effort)
+security delete-generic-password -s com.azurscan.agent -a access 2>/dev/null || true
+security delete-generic-password -s com.azurscan.agent -a refresh 2>/dev/null || true
+
+# Optional: remove binary + data dirs
+rm -rf /usr/local/azurscan
+rm -rf "/Library/Application Support/AzurScan"
+rm -rf /Library/Logs/AzurScan
+
+# Receipt — so pkgutil --pkgs reports it gone
+pkgutil --forget com.azurscan.agent 2>/dev/null || true
+
+echo "Azur-Scan Agent removed."

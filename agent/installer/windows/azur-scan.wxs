@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Azur-Scan Agent installer (WiX 4 / 5 / 7 syntax).
+
+  Self-contained — does NOT require WixToolset.UI.wixext or
+  WixToolset.Util.wixext extensions. Folder ACLs are inherited from
+  ProgramData (SYSTEM and Administrators get full control automatically).
+
+  Server URL flow:
+    1. Property SERVER_URL captured at install time. Two ways to set it:
+         a) msiexec /i azur-scan-agent-0.1.0.msi SERVER_URL="http://host:8000" /qb
+         b) install-azurscan.cmd (interactive prompt; shells out to msiexec)
+    2. Deferred CustomAction "WriteAgentCfg" runs azurscan-agent.exe set-config
+       (with the server URL) after files are on disk and before service starts.
+    3. The service auto-enrolls against that URL on first run (tokenless).
+
+  Build:
+    pwsh -File agent\installer\windows\build.ps1 -Version 0.1.0
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+
+  <Package Name="Azur-Scan Agent"
+           Manufacturer="Azur-Scan"
+           Version="$(var.Version)"
+           UpgradeCode="6BE0A8C3-2D6A-4C8C-A2E5-91D6D9F1C7A1"
+           Scope="perMachine"
+           Compressed="yes">
+
+    <SummaryInformation Description="Azur-Scan endpoint inventory agent" />
+
+    <Launch Condition="Installed OR (VersionNT &gt;= 603)"
+            Message="This product requires Windows 10 or later." />
+
+    <!--
+      Server URL must be supplied for new installs. Secure="yes" lets the
+      property propagate from the user session into the deferred (elevated)
+      CustomAction below.
+    -->
+    <Property Id="SERVER_URL" Secure="yes" />
+    <Launch Condition='Installed OR (SERVER_URL AND SERVER_URL &lt;&gt; "")'
+            Message='SERVER_URL must be provided. Run install-azurscan.cmd or pass SERVER_URL="http://host:8000" to msiexec.' />
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of Azur-Scan Agent is already installed." />
+
+    <MediaTemplate EmbedCab="yes" />
+
+    <!-- C:\Program Files\AzurScan\ -->
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="AzurScan" />
+    </StandardDirectory>
+
+    <!-- C:\ProgramData\AzurScan\ -->
+    <StandardDirectory Id="CommonAppDataFolder">
+      <Directory Id="DATAFOLDER" Name="AzurScan">
+        <Directory Id="LOGSFOLDER" Name="logs" />
+      </Directory>
+    </StandardDirectory>
+
+    <!-- Agent binary -->
+    <Component Id="AgentExe" Directory="INSTALLFOLDER" Bitness="always64">
+      <File Id="AgentExeFile"
+            Source="$(var.AgentExeSource)"
+            Name="azurscan-agent.exe"
+            KeyPath="yes" />
+    </Component>
+
+    <!-- WinSW service wrapper -->
+    <Component Id="WinSwExe" Directory="INSTALLFOLDER" Bitness="always64">
+      <File Id="WinSwExeFile"
+            Source="$(var.WinSwSource)"
+            Name="azurscan-service.exe"
+            KeyPath="yes" />
+
+      <ServiceInstall Id="SvcInstall"
+                      Name="AzurScanAgent"
+                      DisplayName="Azur-Scan Agent"
+                      Description="Azur-Scan IT asset inventory agent"
+                      Type="ownProcess"
+                      Start="auto"
+                      ErrorControl="normal"
+                      Interactive="no" />
+
+      <ServiceControl Id="SvcStart"
+                      Name="AzurScanAgent"
+                      Start="install"
+                      Stop="both"
+                      Remove="uninstall"
+                      Wait="yes" />
+    </Component>
+
+    <Component Id="WinSwXml" Directory="INSTALLFOLDER" Guid="A3F2C1D0-9B4E-4A7C-B5F6-2E8D3C1A0F5B">
+      <File Id="WinSwXmlFile"
+            Source="$(var.InstallerDir)\azurscan-service.xml"
+            Name="azurscan-service.xml"
+            KeyPath="yes" />
+    </Component>
+
+    <Component Id="DataFolderComponent" Directory="DATAFOLDER" Guid="2C7B85D4-1D90-4E0B-93C1-9F9B6E3A1BC3">
+      <CreateFolder />
+      <RegistryValue Root="HKLM"
+                     Key="Software\AzurScan"
+                     Name="DataFolderInstalled"
+                     Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+
+    <Component Id="LogsFolderComponent" Directory="LOGSFOLDER" Guid="9F0C45A2-3E2B-4F47-B1F4-7E25D7F4E3A2">
+      <CreateFolder />
+      <RegistryValue Root="HKLM"
+                     Key="Software\AzurScan"
+                     Name="LogsFolderInstalled"
+                     Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+
+    <Feature Id="MainFeature" Title="Azur-Scan Agent" Level="1">
+      <ComponentRef Id="AgentExe" />
+      <ComponentRef Id="WinSwExe" />
+      <ComponentRef Id="WinSwXml" />
+      <ComponentRef Id="DataFolderComponent" />
+      <ComponentRef Id="LogsFolderComponent" />
+    </Feature>
+
+    <!--
+      Deferred CustomAction: write the server URL into config.yaml.
+      Runs as LocalSystem after files are copied, before the service starts.
+
+      Two-step pattern needed because deferred actions can't read MSI
+      properties directly:
+        1. SetWriteAgentCfg (immediate) copies SERVER_URL into the property
+           bag under the same name as the deferred action.
+        2. WriteAgentCfg (deferred) reads it back from CustomActionData.
+    -->
+    <SetProperty Id="WriteAgentCfg"
+                 Value="[SERVER_URL]"
+                 Before="WriteAgentCfg"
+                 Sequence="execute"
+                 Condition="NOT Installed" />
+
+    <CustomAction Id="WriteAgentCfg"
+                  FileRef="AgentExeFile"
+                  ExeCommand='set-config --server "[CustomActionData]"'
+                  Execute="deferred"
+                  Impersonate="no"
+                  Return="check" />
+
+    <InstallExecuteSequence>
+      <!-- After files are on disk, before service install/start -->
+      <Custom Action="WriteAgentCfg" After="InstallFiles" Condition="NOT Installed" />
+    </InstallExecuteSequence>
+
+  </Package>
+</Wix>
