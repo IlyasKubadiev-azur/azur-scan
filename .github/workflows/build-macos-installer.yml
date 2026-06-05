@@ -1,31 +1,37 @@
 name: Build macOS installer (.pkg + .dmg)
 
-# Triggers:
-#   1. Pushing a tag like `v0.1.1`, `v0.2.0-rc1` — produces a Release with
-#      the .pkg + .dmg attached as downloadable assets.
-#   2. Manual run via the "Run workflow" button on the Actions tab — useful
-#      when you want a test build without bumping a tag.
+# Builds TWO installer pairs in parallel:
+#   - arm64  on `macos-latest`  (Apple Silicon — M1/M2/M3/M4 Macs)
+#   - x86_64 on `macos-13`      (Intel Macs, including older models like
+#                                MacBook 12" 2016 with Core m3)
+#
+# Each lands in the same Release with an arch suffix in the file name.
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
     inputs:
       version:
-        description: "Version string for the build (e.g. 0.1.1)"
+        description: "Version string for the build (e.g. 0.1.6)"
         required: false
         default: "0.0.0-dev"
 
 permissions:
-  contents: write   # needed to create / update a GitHub Release
+  contents: write
 
 jobs:
   build:
-    runs-on: macos-latest   # Apple Silicon (arm64) — free for public repos
+    strategy:
+      fail-fast: false   # one arch failing shouldn't kill the other
+      matrix:
+        include:
+          - runner: macos-latest
+            arch: arm64
+          - runner: macos-13
+            arch: x86_64
+    runs-on: ${{ matrix.runner }}
 
     steps:
-      # ---------------------------------------------------------------
-      # 1. Checkout + Python
-      # ---------------------------------------------------------------
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -36,9 +42,6 @@ jobs:
           cache: pip
           cache-dependency-path: agent/pyproject.toml
 
-      # ---------------------------------------------------------------
-      # 2. Derive version
-      # ---------------------------------------------------------------
       - name: Resolve build version
         id: ver
         shell: bash
@@ -48,27 +51,22 @@ jobs:
           else
             v="${{ github.event.inputs.version || '0.0.0-dev' }}"
           fi
-          echo "version=$v" >> "$GITHUB_OUTPUT"
-          echo "Building version: $v"
+          # Suffix the arch so both DMGs land in the same Release with
+          # distinct names: azur-scan-agent-0.1.6-arm64.dmg, -x86_64.dmg
+          full="$v-${{ matrix.arch }}"
+          echo "version=$full" >> "$GITHUB_OUTPUT"
+          echo "Building: $full on ${{ matrix.runner }} (uname: $(uname -m))"
 
-      # ---------------------------------------------------------------
-      # 3. Install agent + PyInstaller into a fresh venv
-      # ---------------------------------------------------------------
       - name: Install agent dependencies
         working-directory: agent
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e ".[build]"
 
-      # ---------------------------------------------------------------
-      # 4. Build the macOS binary + .pkg + .dmg
-      # ---------------------------------------------------------------
       - name: Build .pkg and .dmg
         run: bash -x agent/installer/macos/build.sh --version "${{ steps.ver.outputs.version }}"
 
-      # On failure: dump PyInstaller's warning log so we don't need to
-      # squint at the run output to figure out missing modules / hooks.
-      - name: Upload diagnostics on failure
+      - name: Upload PyInstaller diagnostics on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
@@ -79,10 +77,6 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-      # ---------------------------------------------------------------
-      # 5. Upload as workflow artifacts (kept ~90 days, downloadable from
-      #    the Actions tab even without a Release)
-      # ---------------------------------------------------------------
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -93,9 +87,6 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-      # ---------------------------------------------------------------
-      # 6. On a tag push, attach to the GitHub Release
-      # ---------------------------------------------------------------
       - name: Attach to Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
