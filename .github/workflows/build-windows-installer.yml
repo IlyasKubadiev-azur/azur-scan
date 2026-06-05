@@ -54,6 +54,20 @@ jobs:
           dotnet tool install --global wix
           wix eula accept wix7
 
+      # WinSW (the Windows Service wrapper) is bundled INSIDE setup.exe via
+      # installer.spec, so it must be on disk BEFORE pyinstaller runs.
+      # It's gitignored (binary, 18 MB), so the runner has to fetch it.
+      - name: Download WinSW
+        shell: pwsh
+        run: |
+          $dst = "agent/installer/windows/azurscan-service.exe"
+          if (-not (Test-Path $dst)) {
+            Invoke-WebRequest `
+              "https://github.com/winsw/winsw/releases/download/v2.12.0/WinSW-x64.exe" `
+              -OutFile $dst -UseBasicParsing
+          }
+          Write-Host "WinSW: $((Get-Item $dst).Length) bytes"
+
       # ---------------------------------------------------------------
       # Build pipeline:
       #   1. agent.exe   (PyInstaller)
