@@ -1,23 +1,19 @@
 name: Build macOS installer (.pkg + .dmg)
 
-# Produces a SINGLE universal binary `.pkg` and `.dmg` that runs natively
-# on both Apple Silicon (arm64, M1/M2/M3/M4) and Intel (x86_64) Macs.
+# Apple Silicon ONLY (M1/M2/M3/M4, 2020+).
 #
-# Three jobs:
-#   1. build-arm64   on macos-latest  — PyInstaller bundle for arm64
-#   2. build-x86_64  on macos-13      — PyInstaller bundle for x86_64
-#   3. package       on macos-latest  — downloads both binaries, lipo-merges
-#                                       them, runs pkgbuild + hdiutil
-#
-# The two build jobs run in parallel; package waits on both. Net wall-clock
-# = slower of the two builds + ~30s packaging.
+# We dropped Intel Mac support in v0.1.8 — Apple stopped selling Intel Macs
+# in 2020, GitHub's free `macos-13` runners are now sometimes queued for
+# hours and were blocking releases. If Intel support is needed again later,
+# revive the matrix from v0.1.7 (build-macos-installer.yml history) — it
+# uses `lipo` to fuse arm64 + x86_64 into a single universal binary.
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
     inputs:
       version:
-        description: "Version string (e.g. 0.1.7)"
+        description: "Version string (e.g. 0.1.8)"
         required: false
         default: "0.0.0-dev"
 
@@ -25,66 +21,17 @@ permissions:
   contents: write
 
 jobs:
-  # ---------------------------------------------------------------------------
-  # Per-arch builds — produce just the agent binary as an artifact
-  # ---------------------------------------------------------------------------
   build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: macos-latest
-            arch: arm64
-          - runner: macos-13
-            arch: x86_64
-    runs-on: ${{ matrix.runner }}
+    runs-on: macos-latest   # Apple Silicon (arm64)
 
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: agent/pyproject.toml
-
-      - name: Install agent deps
-        working-directory: agent
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e ".[build]"
-
-      - name: Build agent binary (${{ matrix.arch }})
-        working-directory: agent
-        run: python build/build.py
-
-      - name: Sanity-check architecture
-        working-directory: agent
-        run: |
-          file dist/azurscan-agent
-          arch_actual=$(lipo -archs dist/azurscan-agent 2>/dev/null || file -b dist/azurscan-agent | grep -oE 'x86_64|arm64')
-          echo "binary arch = $arch_actual, expected = ${{ matrix.arch }}"
-          # Ensure runner actually produced the arch it advertised
-          if ! echo "$arch_actual" | grep -q "${{ matrix.arch }}"; then
-              echo "ARCH MISMATCH"; exit 1
-          fi
-
-      - name: Upload binary
-        uses: actions/upload-artifact@v4
-        with:
-          name: agent-bin-${{ matrix.arch }}
-          path: agent/dist/azurscan-agent
-          if-no-files-found: error
-          retention-days: 1
-
-  # ---------------------------------------------------------------------------
-  # Final packaging — lipo-merge + pkgbuild + dmg, runs once
-  # ---------------------------------------------------------------------------
-  package:
-    needs: build
-    runs-on: macos-latest
-
-    steps:
-      - uses: actions/checkout@v4
 
       - name: Resolve build version
         id: ver
@@ -97,37 +44,25 @@ jobs:
           fi
           echo "version=$v" >> "$GITHUB_OUTPUT"
 
-      - name: Download arm64 binary
-        uses: actions/download-artifact@v4
-        with:
-          name: agent-bin-arm64
-          path: bins/arm64
-
-      - name: Download x86_64 binary
-        uses: actions/download-artifact@v4
-        with:
-          name: agent-bin-x86_64
-          path: bins/x86_64
-
-      - name: Merge into universal binary with lipo
+      - name: Install agent deps
+        working-directory: agent
         run: |
-          mkdir -p agent/dist
-          chmod +x bins/arm64/azurscan-agent bins/x86_64/azurscan-agent
-          lipo -create \
-              -output agent/dist/azurscan-agent \
-              bins/arm64/azurscan-agent \
-              bins/x86_64/azurscan-agent
-          chmod 755 agent/dist/azurscan-agent
-          echo "=== Final binary ==="
-          file agent/dist/azurscan-agent
-          lipo -archs agent/dist/azurscan-agent
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[build]"
 
-      - name: Build .pkg and .dmg from universal binary
-        # build.sh detects an existing dist/azurscan-agent and skips its own
-        # PyInstaller step via --skip-build.
-        run: bash -x agent/installer/macos/build.sh \
-                --version "${{ steps.ver.outputs.version }}" \
-                --skip-build
+      - name: Build .pkg and .dmg
+        run: bash -x agent/installer/macos/build.sh --version "${{ steps.ver.outputs.version }}"
+
+      - name: Upload PyInstaller diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-debug-${{ steps.ver.outputs.version }}
+          path: |
+            agent/build/_pyinstaller_work/**/warn-*.txt
+            agent/build/_pyinstaller_work/**/xref-*.html
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
