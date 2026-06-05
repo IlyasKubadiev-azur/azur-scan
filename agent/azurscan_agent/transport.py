@@ -106,11 +106,19 @@ class Transport:
     def _auth_call(self, method: str, path: str, **kwargs) -> dict:
         creds = load_credentials()
         access = creds.get("access", "")
+        # Diagnostic fingerprint — first/last 6 chars of the token + length.
+        # Helps identify "wrong/stale credentials in storage" without leaking
+        # the full JWT to logs.
+        if access:
+            fp = f"{access[:6]}...{access[-6:]}(len={len(access)})"
+        else:
+            fp = "<EMPTY>"
         headers = {"Authorization": f"Bearer {access}"} if access else {}
         kwargs.setdefault("headers", {}).update(headers)
 
         r = self._client.request(method, path, **kwargs)
         if r.status_code == 401:
+            log.warning("auth call %s %s -> 401 with token %s", method, path, fp)
             # one retry after refresh
             new_access = self.refresh_access_token()
             kwargs["headers"]["Authorization"] = f"Bearer {new_access}"
