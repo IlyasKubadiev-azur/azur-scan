@@ -6,8 +6,17 @@ __pycache__/
 .Python
 *.egg-info/
 .eggs/
-build/
+# Generic Python build artifacts
+/build/
 dist/
+
+# Ignore everything in agent/build/ EXCEPT the PyInstaller spec + driver,
+# which are source code and MUST be in version control. Past iterations
+# leaked PyInstaller workspaces here (_pyinstaller_work, _setup_work, etc.)
+# — this whitelist keeps the repo clean regardless of what tools dump there.
+agent/build/*
+!agent/build/build.py
+!agent/build/azurscan-agent.spec
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
