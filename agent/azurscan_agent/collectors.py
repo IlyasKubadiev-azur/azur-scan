@@ -97,6 +97,9 @@ def _collect_os() -> dict:
     version = platform.release()
     build = platform.version()
     arch = platform.machine()
+    display_version = ""
+    edition = ""
+
     if sys.platform == "win32":
         # platform.release() returns "10" / "11"; build comes from ver
         try:
@@ -106,18 +109,60 @@ def _collect_os() -> dict:
             build = ver[1] or build
         except Exception:
             pass
+        # Feature update (24H2, 25H2…) and edition (Pro/Enterprise/Home)
+        # live under HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion.
+        # platform.win32_ver() does NOT expose them, hence the registry read.
+        try:
+            import winreg
+            with winreg.OpenKey(
+                winreg.HKEY_LOCAL_MACHINE,
+                r"SOFTWARE\Microsoft\Windows NT\CurrentVersion",
+                0,
+                winreg.KEY_READ | winreg.KEY_WOW64_64KEY,
+            ) as k:
+                def _rd(name: str) -> str:
+                    try:
+                        v, _ = winreg.QueryValueEx(k, name)
+                        return str(v).strip()
+                    except OSError:
+                        return ""
+                # DisplayVersion: "24H2", "25H2" (Win10 1909+ / Win11 22H2+)
+                # Fallback to ReleaseId (older builds: "1909", "2009"…)
+                display_version = _rd("DisplayVersion") or _rd("ReleaseId")
+                # EditionID: "Professional", "Enterprise", "Core"
+                # ProductName: full marketing name with edition
+                edition = _rd("EditionID") or _rd("ProductName")
+                # If we don't have build yet, take CurrentBuild + UBR
+                if not build:
+                    cb = _rd("CurrentBuild")
+                    ubr = _rd("UBR")
+                    if cb:
+                        build = f"{cb}.{ubr}" if ubr else cb
+        except Exception:
+            pass
+
     elif sys.platform == "darwin":
         try:
             ver, _, _ = platform.mac_ver()
             name = "macOS"
             version = ver or version
+            # macOS marketing names by major version
+            major = (ver or "").split(".")[0]
+            display_version = {
+                "11": f"Big Sur {ver}", "12": f"Monterey {ver}",
+                "13": f"Ventura {ver}", "14": f"Sonoma {ver}",
+                "15": f"Sequoia {ver}", "26": f"Tahoe {ver}",
+            }.get(major, ver)
         except Exception:
             pass
+
     return {
         "name": name,
         "version": version,
         "build": build,
         "arch": arch,
+        "display_version": display_version,
+        "edition": edition,
     }
 
 
@@ -126,33 +171,63 @@ def _collect_os() -> dict:
 # ---------------------------------------------------------------------------
 
 def _collect_hardware() -> dict:
+    cpu_model = _cpu_model()
     cpu = {
-        "model": _cpu_model(),
+        "model": cpu_model,
+        "vendor": _cpu_vendor(cpu_model),
         "cores": psutil.cpu_count(logical=False) or None,
         "threads": psutil.cpu_count(logical=True) or None,
+        "base_ghz": _cpu_base_ghz(),
+        "arch": platform.machine() or "",
     }
     ram_total_mb = int(psutil.virtual_memory().total / (1024 * 1024))
 
-    manufacturer = ""
-    model = ""
-    serial = ""
-    motherboard = ""
-    gpu = ""
+    manufacturer = model = serial = gpu = ""
+    motherboard = {"manufacturer": "", "product": "", "serial": ""}
+    bios = {"vendor": "", "version": "", "release_date": ""}
 
     if sys.platform == "win32":
-        manufacturer, model, serial, motherboard, gpu = _hw_windows()
+        manufacturer, model, serial, motherboard, bios, gpu = _hw_windows()
     elif sys.platform == "darwin":
-        manufacturer, model, serial, motherboard, gpu = _hw_macos()
+        manufacturer, model, serial, motherboard, bios, gpu = _hw_macos()
 
     return {
         "cpu": cpu,
         "ram_total_mb": ram_total_mb,
         "motherboard": motherboard,
+        "bios": bios,
         "gpu": gpu,
         "manufacturer": manufacturer,
         "model": model,
         "serial_number": serial,
     }
+
+
+def _cpu_vendor(model: str) -> str:
+    """Infer vendor from CPU model string (most reliable cross-platform)."""
+    lower = (model or "").lower()
+    if "intel" in lower or "xeon" in lower or "pentium" in lower or "celeron" in lower:
+        return "Intel"
+    if "amd" in lower or "ryzen" in lower or "epyc" in lower or "threadripper" in lower:
+        return "AMD"
+    if "apple" in lower or lower.startswith("m1") or lower.startswith("m2") \
+            or lower.startswith("m3") or lower.startswith("m4"):
+        return "Apple"
+    if "qualcomm" in lower or "snapdragon" in lower:
+        return "Qualcomm"
+    return ""
+
+
+def _cpu_base_ghz() -> float | None:
+    """Best-effort base clock in GHz."""
+    try:
+        freq = psutil.cpu_freq()
+        # `freq.max` is the rated max (== base on most modern CPUs); MHz → GHz
+        if freq and freq.max:
+            return round(freq.max / 1000.0, 2)
+    except Exception:
+        pass
+    return None
 
 
 def _cpu_model() -> str:
@@ -172,7 +247,12 @@ def _cpu_model() -> str:
     return platform.processor() or ""
 
 
-def _hw_windows() -> tuple[str, str, str, str, str]:
+def _hw_windows() -> tuple[str, str, str, dict, dict, str]:
+    """Returns (manufacturer, model, serial, motherboard{}, bios{}, gpu)."""
+    motherboard = {"manufacturer": "", "product": "", "serial": ""}
+    bios_info = {"vendor": "", "version": "", "release_date": ""}
+    manufacturer = model = serial = gpu = ""
+
     try:
         import wmi  # type: ignore
         c = wmi.WMI()
@@ -180,24 +260,55 @@ def _hw_windows() -> tuple[str, str, str, str, str]:
         cs = c.Win32_ComputerSystem()[0] if c.Win32_ComputerSystem() else None
         bb = c.Win32_BaseBoard()[0] if c.Win32_BaseBoard() else None
         gpus = c.Win32_VideoController()
-        manufacturer = (cs.Manufacturer or "") if cs else ""
-        model = (cs.Model or "") if cs else ""
-        serial = (bios.SerialNumber or "") if bios else ""
-        motherboard = ((bb.Manufacturer or "") + " " + (bb.Product or "")).strip() if bb else ""
-        gpu = "; ".join(g.Name for g in gpus if g.Name) if gpus else ""
-        return manufacturer.strip(), model.strip(), serial.strip(), motherboard, gpu
+
+        if cs:
+            manufacturer = (cs.Manufacturer or "").strip()
+            model = (cs.Model or "").strip()
+        if bios:
+            serial = (bios.SerialNumber or "").strip()
+            bios_info = {
+                "vendor": (bios.Manufacturer or "").strip(),
+                # SMBIOSBIOSVersion is what Windows shows in `msinfo32`
+                "version": (getattr(bios, "SMBIOSBIOSVersion", None)
+                            or bios.Version or "").strip(),
+                # ReleaseDate format is YYYYMMDDHHMMSS.000000+ZZZ — keep first 8
+                "release_date": _format_wmi_date(getattr(bios, "ReleaseDate", "")),
+            }
+        if bb:
+            motherboard = {
+                "manufacturer": (bb.Manufacturer or "").strip(),
+                "product": (bb.Product or "").strip(),
+                "serial": (bb.SerialNumber or "").strip(),
+            }
+        if gpus:
+            gpu = "; ".join(g.Name for g in gpus if g.Name)
+
+        return manufacturer, model, serial, motherboard, bios_info, gpu
     except Exception:
         # Fallback: WMIC (deprecated, but still on most installs)
         try:
             manufacturer = _wmic("computersystem", "get", "manufacturer")
             model = _wmic("computersystem", "get", "model")
             serial = _wmic("bios", "get", "serialnumber")
-            return manufacturer.strip(), model.strip(), serial.strip(), "", ""
+            bios_info["version"] = _wmic("bios", "get", "smbiosbiosversion")
+            return manufacturer.strip(), model.strip(), serial.strip(), \
+                motherboard, bios_info, ""
         except Exception:
-            return "", "", "", "", ""
+            return "", "", "", motherboard, bios_info, ""
 
 
-def _hw_macos() -> tuple[str, str, str, str, str]:
+def _format_wmi_date(s: str) -> str:
+    """WMI dates look like '20240612000000.000000+180'. Return YYYY-MM-DD."""
+    s = (s or "").strip()
+    if len(s) >= 8 and s[:8].isdigit():
+        return f"{s[0:4]}-{s[4:6]}-{s[6:8]}"
+    return s
+
+
+def _hw_macos() -> tuple[str, str, str, dict, dict, str]:
+    """Returns (manufacturer, model, serial, motherboard{}, bios{}, gpu)."""
+    motherboard = {"manufacturer": "", "product": "", "serial": ""}
+    bios_info = {"vendor": "", "version": "", "release_date": ""}
     try:
         out = subprocess.run(
             ["system_profiler", "SPHardwareDataType"],
@@ -211,7 +322,14 @@ def _hw_macos() -> tuple[str, str, str, str, str]:
         manufacturer = "Apple"
         model = kv.get("Model Name", "") or kv.get("Model Identifier", "")
         serial = kv.get("Serial Number (system)", "") or kv.get("Hardware UUID", "")
-        # GPU
+        # Macs don't have a separate "motherboard" SKU — use Model Identifier.
+        motherboard["manufacturer"] = "Apple"
+        motherboard["product"] = kv.get("Model Identifier", "")
+        # Boot ROM (firmware) version is the macOS equivalent of BIOS version.
+        bios_info["vendor"] = "Apple"
+        bios_info["version"] = kv.get("System Firmware Version", "") \
+            or kv.get("Boot ROM Version", "")
+
         try:
             gpu_out = subprocess.run(
                 ["system_profiler", "SPDisplaysDataType"],
@@ -221,9 +339,9 @@ def _hw_macos() -> tuple[str, str, str, str, str]:
             gpu = gpu_match.group(1).strip() if gpu_match else ""
         except Exception:
             gpu = ""
-        return manufacturer, model, serial, "", gpu
+        return manufacturer, model, serial, motherboard, bios_info, gpu
     except Exception:
-        return "Apple", "", "", "", ""
+        return "Apple", "", "", motherboard, bios_info, ""
 
 
 def _wmic(*args) -> str:

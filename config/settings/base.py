@@ -205,7 +205,11 @@ AGENT_JWT_SECRET = env("AGENT_JWT_SECRET", default="dev-agent-secret-CHANGE-ME")
 AGENT_ACCESS_TOKEN_TTL = timedelta(hours=24)
 AGENT_REFRESH_TOKEN_TTL = timedelta(days=90)
 AGENT_OFFLINE_AFTER = timedelta(minutes=5)
-AGENT_HEARTBEAT_INTERVAL_S = env.int("AGENT_HEARTBEAT_INTERVAL_S", default=90)
+# 15s heartbeat gives near-instant reaction to "Run scan now" without
+# producing meaningful network/CPU pressure. The interval is pushed to the
+# agent in the enroll response; old agents that cached 90s will refresh on
+# their next enroll/re-enroll.
+AGENT_HEARTBEAT_INTERVAL_S = env.int("AGENT_HEARTBEAT_INTERVAL_S", default=15)
 AGENT_FULL_SCAN_INTERVAL_H = env.int("AGENT_FULL_SCAN_INTERVAL_H", default=6)
 
 

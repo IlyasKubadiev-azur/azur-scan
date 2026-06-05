@@ -28,8 +28,11 @@ WINSW_EXE   = INSTALL_DIR / "azurscan-service.exe"
 
 BUNDLED = ["azurscan-agent.exe", "azurscan-service.exe", "azurscan-service.xml"]
 
-# Pre-filled default — change for your office before shipping
-DEFAULT_SERVER = "http://10.0.20.143:8000"
+# Pre-filled default — change for your office before shipping.
+# 10.0.2.30 is the dev box's Ethernet IP. The Wi-Fi address is volatile
+# (DHCP reissues every few days), Ethernet is stable as long as the device
+# stays plugged in.
+DEFAULT_SERVER = "http://10.0.2.30:8000"
 
 
 # ── elevation ───────────────────────────────────────────────────────────────

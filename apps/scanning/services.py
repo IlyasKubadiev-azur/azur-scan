@@ -65,6 +65,8 @@ def _apply_to_asset(asset: Asset, payload: ScanPayload) -> None:
     asset.os_version = payload.os.version
     asset.os_build = payload.os.build
     asset.os_arch = payload.os.arch
+    asset.os_display_version = payload.os.display_version
+    asset.os_edition = payload.os.edition
 
     if payload.hardware.manufacturer:
         asset.manufacturer = payload.hardware.manufacturer
@@ -72,10 +74,29 @@ def _apply_to_asset(asset: Asset, payload: ScanPayload) -> None:
         asset.model = payload.hardware.model
     if payload.hardware.serial_number:
         asset.serial_number = payload.hardware.serial_number
+
+    # CPU
     asset.cpu_model = payload.hardware.cpu.model
+    asset.cpu_vendor = payload.hardware.cpu.vendor
     asset.cpu_cores = payload.hardware.cpu.cores
+    asset.cpu_threads = payload.hardware.cpu.threads
+    asset.cpu_base_ghz = payload.hardware.cpu.base_ghz
+    asset.cpu_arch = payload.hardware.cpu.arch
+
     asset.ram_total_mb = payload.hardware.ram_total_mb
-    asset.motherboard = payload.hardware.motherboard
+
+    # Motherboard — split fields + composite (back-compat)
+    mb = payload.hardware.motherboard
+    asset.motherboard_manufacturer = mb.manufacturer
+    asset.motherboard_product = mb.product
+    asset.motherboard_serial = mb.serial
+    asset.motherboard = " ".join(p for p in (mb.manufacturer, mb.product) if p).strip()
+
+    # BIOS
+    asset.bios_vendor = payload.hardware.bios.vendor
+    asset.bios_version = payload.hardware.bios.version
+    asset.bios_release_date = payload.hardware.bios.release_date
+
     asset.gpu = payload.hardware.gpu
 
     asset.agent_version = payload.agent_version

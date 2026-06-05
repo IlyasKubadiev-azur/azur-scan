@@ -148,17 +148,18 @@ cp "$PKG_OUT" "$DMG_STAGE/Azur-Scan Agent.pkg"
 cat > "$DMG_STAGE/README.txt" <<EOF
 Azur-Scan Agent ${VERSION}
 
-Double-click "Azur-Scan Agent.pkg" to install.
+Double-click "Azur-Scan Agent.pkg" to install (you'll be prompted for an
+admin password to register the LaunchDaemon).
 
-After installation, enroll the device with:
+After installation, point the agent at your backend. Enrollment is
+tokenless — the daemon auto-registers on first start.
 
-    sudo /usr/local/azurscan/bin/azurscan-agent enroll \\
-         --server https://your.azurscan.server \\
-         --token  evt_...
-
+    sudo /usr/local/azurscan/bin/azurscan-agent set-config \\
+         --server http://10.0.20.143:8000
     sudo launchctl kickstart -k system/com.azurscan.agent
 
-Logs: /Library/Logs/AzurScan/
+Logs:    /Library/Logs/AzurScan/agent.log
+Config:  /Library/Application Support/AzurScan/config.yaml
 EOF
 
 rm -f "$DMG_OUT"

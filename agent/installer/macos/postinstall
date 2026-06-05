@@ -32,10 +32,12 @@ launchctl enable system/com.azurscan.agent
 launchctl kickstart -k system/com.azurscan.agent
 
 echo "Azur-Scan Agent installed and started."
-echo "Enroll with:"
-echo "  sudo /usr/local/azurscan/bin/azurscan-agent enroll \\"
-echo "       --server https://api.example.com \\"
-echo "       --token evt_xxxxxxxxxxxx"
+echo ""
+echo "Enrollment is tokenless — configure the server URL once, then the"
+echo "daemon auto-registers on first run:"
+echo ""
+echo "  sudo /usr/local/azurscan/bin/azurscan-agent set-config \\"
+echo "       --server http://10.0.20.143:8000"
 echo "  sudo launchctl kickstart -k system/com.azurscan.agent"
 
 exit 0

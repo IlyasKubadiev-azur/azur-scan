@@ -44,9 +44,22 @@ class AssetSerializer(serializers.ModelSerializer):
             "id", "hostname", "fqdn",
             "serial_number", "manufacturer", "model",
             "asset_type", "asset_type_id",
+            # OS
             "os_name", "os_version", "os_build", "os_arch",
-            "cpu_model", "cpu_cores", "ram_total_mb", "motherboard", "gpu",
+            "os_display_version", "os_edition",
+            # CPU
+            "cpu_model", "cpu_vendor", "cpu_cores", "cpu_threads",
+            "cpu_base_ghz", "cpu_arch",
+            # Memory / GPU
+            "ram_total_mb", "gpu",
+            # Motherboard
+            "motherboard", "motherboard_manufacturer",
+            "motherboard_product", "motherboard_serial",
+            # BIOS
+            "bios_vendor", "bios_version", "bios_release_date",
+            # Users
             "current_user_login", "last_logged_user", "current_owner",
+            # Service
             "status", "first_seen_at", "last_seen_at", "agent_version",
             "is_manual", "notes",
             "network_interfaces", "disks", "has_agent",
@@ -57,7 +70,13 @@ class AssetSerializer(serializers.ModelSerializer):
             "id",
             "first_seen_at", "last_seen_at", "agent_version", "status",
             "os_name", "os_version", "os_build", "os_arch",
-            "cpu_model", "cpu_cores", "ram_total_mb", "motherboard", "gpu",
+            "os_display_version", "os_edition",
+            "cpu_model", "cpu_vendor", "cpu_cores", "cpu_threads",
+            "cpu_base_ghz", "cpu_arch",
+            "ram_total_mb", "gpu",
+            "motherboard", "motherboard_manufacturer",
+            "motherboard_product", "motherboard_serial",
+            "bios_vendor", "bios_version", "bios_release_date",
             "manufacturer", "model", "serial_number",
             "current_user_login", "last_logged_user",
             "is_manual", "created_at", "updated_at",

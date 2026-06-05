@@ -3,11 +3,17 @@
 <body style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; padding: 12px; line-height: 1.5; color: #1d1d1f;">
   <h2 style="margin-top: 0;">Installation complete</h2>
   <p>The agent is now installed and running as a system daemon.</p>
-  <h4>Enroll the device</h4>
+
+  <h4>Point it at the backend</h4>
   <p>Open Terminal and run:</p>
-  <pre style="background: #f5f5f7; padding: 10px 12px; border-radius: 6px; font-size: 12px;">sudo /usr/local/azurscan/bin/azurscan-agent enroll \
-     --server https://api.your-company.com \
-     --token  evt_xxxxxxxxxxxxxxxx
+  <pre style="background: #f5f5f7; padding: 10px 12px; border-radius: 6px; font-size: 12px;">sudo /usr/local/azurscan/bin/azurscan-agent set-config \
+     --server http://10.0.20.143:8000
 sudo launchctl kickstart -k system/com.azurscan.agent</pre>
-  <p style="color: #6e6e73; font-size: 13px;">Logs: <code>/Library/Logs/AzurScan/agent.log</code></p>
+
+  <p>The daemon will auto-register this Mac on the next start — no
+  enrollment token needed; the backend identifies the device by its stable
+  IOPlatformUUID.</p>
+
+  <p style="color: #6e6e73; font-size: 13px;">Logs:
+    <code>/Library/Logs/AzurScan/agent.log</code></p>
 </body></html>

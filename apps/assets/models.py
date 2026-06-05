@@ -37,12 +37,34 @@ class Asset(UUIDPKModel, TimeStampedModel):
     os_version = models.CharField(max_length=64, blank=True, default="")
     os_build = models.CharField(max_length=64, blank=True, default="")
     os_arch = models.CharField(max_length=32, blank=True, default="")
+    # Display version: Windows feature update like "24H2", "25H2";
+    # macOS friendly name like "Sonoma 14.5"
+    os_display_version = models.CharField(max_length=32, blank=True, default="")
+    os_edition = models.CharField(max_length=64, blank=True, default="")  # Pro / Enterprise / Home
 
     # Hardware (denormalized hot fields; full snapshot lives in ScanSession.payload)
     cpu_model = models.CharField(max_length=255, blank=True, default="")
+    cpu_vendor = models.CharField(max_length=32, blank=True, default="")     # Intel / AMD / Apple
     cpu_cores = models.PositiveSmallIntegerField(null=True, blank=True)
+    cpu_threads = models.PositiveSmallIntegerField(null=True, blank=True)
+    cpu_base_ghz = models.DecimalField(
+        max_digits=4, decimal_places=2, null=True, blank=True,
+    )
+    cpu_arch = models.CharField(max_length=32, blank=True, default="")       # x86_64 / arm64
     ram_total_mb = models.PositiveIntegerField(null=True, blank=True)
+
+    # Motherboard split into manufacturer / product / serial.
+    # `motherboard` kept for backward compat ("Manufacturer Product" composite).
     motherboard = models.CharField(max_length=255, blank=True, default="")
+    motherboard_manufacturer = models.CharField(max_length=128, blank=True, default="")
+    motherboard_product = models.CharField(max_length=128, blank=True, default="")
+    motherboard_serial = models.CharField(max_length=128, blank=True, default="")
+
+    # BIOS / UEFI firmware
+    bios_vendor = models.CharField(max_length=128, blank=True, default="")
+    bios_version = models.CharField(max_length=64, blank=True, default="")
+    bios_release_date = models.CharField(max_length=32, blank=True, default="")
+
     gpu = models.CharField(max_length=255, blank=True, default="")
 
     # Users

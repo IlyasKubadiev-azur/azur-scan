@@ -9,8 +9,9 @@ remain readable even after schema evolution.
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class _Strict(BaseModel):
@@ -30,22 +31,53 @@ class OSFacts(_Strict):
     version: str = ""
     build: str = ""
     arch: str = ""
+    # Windows feature update ("24H2", "25H2") or macOS friendly name ("Sonoma 14.5")
+    display_version: str = ""
+    edition: str = ""  # Pro / Enterprise / Home
 
 
 class CPUFacts(_Strict):
     model: str = ""
+    vendor: str = ""      # Intel / AMD / Apple
     cores: int | None = None
     threads: int | None = None
+    base_ghz: float | None = None
+    arch: str = ""        # x86_64 / arm64
+
+
+class MotherboardFacts(_Strict):
+    manufacturer: str = ""
+    product: str = ""
+    serial: str = ""
+
+
+class BIOSFacts(_Strict):
+    vendor: str = ""
+    version: str = ""
+    release_date: str = ""
 
 
 class HardwareFacts(_Strict):
     cpu: CPUFacts = Field(default_factory=CPUFacts)
     ram_total_mb: int | None = None
-    motherboard: str = ""
+    motherboard: MotherboardFacts = Field(default_factory=MotherboardFacts)
+    bios: BIOSFacts = Field(default_factory=BIOSFacts)
     gpu: str = ""
     manufacturer: str = ""
     model: str = ""
     serial_number: str = ""
+
+    @field_validator("motherboard", mode="before")
+    @classmethod
+    def _normalize_motherboard(cls, v: Any) -> Any:
+        """Backward-compat for agent <= 0.1.0 which sent motherboard as a
+        composite string ("Manufacturer Product"). New agents send a dict
+        {manufacturer, product, serial}. Without this normalization, old
+        agents' scan uploads would 400 with `Input should be a valid dict`.
+        """
+        if isinstance(v, str):
+            return {"manufacturer": "", "product": v, "serial": ""}
+        return v
 
 
 class DiskFacts(_Strict):

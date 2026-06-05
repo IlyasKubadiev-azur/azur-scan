@@ -1,0 +1,100 @@
+name: Build Windows installer (.msi + setup.exe)
+
+# Same triggers as the macOS workflow — on a `v*` tag both run in parallel
+# and attach to the same GitHub Release.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version string for the build (e.g. 0.1.1)"
+        required: false
+        default: "0.0.0-dev"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: agent/pyproject.toml
+
+      - name: Resolve build version
+        id: ver
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            v="${GITHUB_REF#refs/tags/v}"
+          else
+            v="${{ github.event.inputs.version || '0.0.0-dev' }}"
+          fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "Building version: $v"
+
+      - name: Install agent + build deps
+        working-directory: agent
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[build,windows]"
+
+      - name: Install WiX Toolset
+        shell: pwsh
+        run: |
+          dotnet tool install --global wix
+          wix eula accept wix7
+
+      # ---------------------------------------------------------------
+      # Build pipeline:
+      #   1. agent.exe   (PyInstaller)
+      #   2. setup.exe   (PyInstaller, bundles agent.exe + WinSW)
+      #   3. .msi        (WiX 7)
+      #   4. ZIP         (all three + portable install.ps1)
+      # ---------------------------------------------------------------
+      - name: Build agent.exe
+        working-directory: agent
+        run: python build/build.py
+
+      - name: Build setup.exe
+        working-directory: agent
+        run: pyinstaller installer/windows/installer.spec --noconfirm --clean --distpath dist --workpath build/_installer_work
+
+      - name: Build .msi
+        shell: pwsh
+        run: pwsh -NoProfile -File agent/installer/windows/build.ps1 -Version ${{ steps.ver.outputs.version }} -SkipExeBuild
+
+      - name: Build deployment ZIP
+        shell: pwsh
+        run: pwsh -NoProfile -File agent/installer/windows/package.ps1 -Version ${{ steps.ver.outputs.version }} -SkipExeBuild
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: azur-scan-agent-windows-${{ steps.ver.outputs.version }}
+          path: |
+            agent/dist/azur-scan-agent-*.msi
+            agent/dist/azur-scan-agent-*.zip
+            agent/dist/azur-scan-agent-setup.exe
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Attach to Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            agent/dist/azur-scan-agent-*.msi
+            agent/dist/azur-scan-agent-*.zip
+            agent/dist/azur-scan-agent-setup.exe
+          generate_release_notes: true
+          fail_on_unmatched_files: true
