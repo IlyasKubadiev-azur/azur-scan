@@ -4,8 +4,14 @@ Strategy:
   Windows: DPAPI (`win32crypt.CryptProtectData`) with machine scope.
            Encrypted blob in `credentials.bin`. Only the LocalSystem account
            (or the account that encrypted it, depending on flag) can decrypt.
-  macOS:   System Keychain via `/usr/bin/security` CLI. Service name is
-           `com.azurscan.agent`, account names are `access` / `refresh`.
+  macOS:   System Keychain via `/usr/bin/security` CLI with an EXPLICIT
+           keychain path (`/Library/Keychains/System.keychain`). The agent
+           runs as a LaunchDaemon under root, which has no login session
+           and therefore no default keychain — without -k the `security`
+           CLI's behavior is undefined and bites you with infinite enroll
+           loops (writes succeed but reads return empty).
+           Falls back to a 0600 file in /Library/Application Support if
+           the keychain is somehow inaccessible.
   Linux/dev: plain JSON file with permissions 0600. Not cryptographically
              protected — fine for testing but flagged on enrollment.
 """
@@ -21,14 +27,21 @@ from pathlib import Path
 from .config import SECRETS_FILE, ensure_dirs
 
 KEYCHAIN_SERVICE = "com.azurscan.agent"
+MACOS_KEYCHAIN_PATH = "/Library/Keychains/System.keychain"
 
 
 def store_credentials(access_token: str, refresh_token: str) -> None:
     if sys.platform == "win32":
         _store_windows({"access": access_token, "refresh": refresh_token})
     elif sys.platform == "darwin":
-        _store_macos("access", access_token)
-        _store_macos("refresh", refresh_token)
+        # Try Keychain first; if either write fails, fall back to a 0600
+        # JSON file. This avoids the "writes silently succeed but reads
+        # return empty" pathology when the CLI's default keychain is
+        # ambiguous under a LaunchDaemon root context.
+        ok = _store_macos("access", access_token) and \
+             _store_macos("refresh", refresh_token)
+        if not ok:
+            _store_plain({"access": access_token, "refresh": refresh_token})
     else:
         _store_plain({"access": access_token, "refresh": refresh_token})
 
@@ -37,10 +50,18 @@ def load_credentials() -> dict:
     if sys.platform == "win32":
         return _load_windows()
     if sys.platform == "darwin":
-        return {
+        creds = {
             "access": _load_macos("access"),
             "refresh": _load_macos("refresh"),
         }
+        if creds["access"] and creds["refresh"]:
+            return creds
+        # Either Keychain access broken or we fell back to file on write —
+        # try the file as the source of truth.
+        file_creds = _load_plain()
+        if file_creds.get("access"):
+            return file_creds
+        return creds
     return _load_plain()
 
 
@@ -54,9 +75,15 @@ def clear_credentials() -> None:
         for account in ("access", "refresh"):
             subprocess.run(
                 ["security", "delete-generic-password",
-                 "-s", KEYCHAIN_SERVICE, "-a", account],
+                 "-s", KEYCHAIN_SERVICE, "-a", account,
+                 MACOS_KEYCHAIN_PATH],
                 capture_output=True,
             )
+        # Also clear the file fallback so it can't override a fresh Keychain
+        try:
+            SECRETS_FILE.unlink()
+        except FileNotFoundError:
+            pass
     else:
         try:
             SECRETS_FILE.unlink()
@@ -104,29 +131,33 @@ def _dpapi_decrypt(blob: bytes) -> bytes:
 # macOS Keychain
 # ---------------------------------------------------------------------------
 
-def _store_macos(account: str, value: str) -> None:
-    # Delete any existing item first (idempotent update)
+def _store_macos(account: str, value: str) -> bool:
+    """Returns True on success. Caller falls back to file storage on False."""
+    # Delete any existing item first (idempotent update). Allowed to fail.
     subprocess.run(
         ["security", "delete-generic-password",
-         "-s", KEYCHAIN_SERVICE, "-a", account],
+         "-s", KEYCHAIN_SERVICE, "-a", account,
+         MACOS_KEYCHAIN_PATH],
         capture_output=True,
     )
-    subprocess.run(
+    res = subprocess.run(
         ["security", "add-generic-password",
          "-s", KEYCHAIN_SERVICE,
          "-a", account,
          "-w", value,
-         "-T", "",  # no app trust list — only the storing process can read
-         "-U"],
-        check=True,
-        capture_output=True,
+         "-T", "",   # no app trust list — only the storing process can read
+         "-U",
+         MACOS_KEYCHAIN_PATH],  # explicit keychain path is the key fix
+        capture_output=True, text=True,
     )
+    return res.returncode == 0
 
 
 def _load_macos(account: str) -> str:
     res = subprocess.run(
         ["security", "find-generic-password",
-         "-s", KEYCHAIN_SERVICE, "-a", account, "-w"],
+         "-s", KEYCHAIN_SERVICE, "-a", account, "-w",
+         MACOS_KEYCHAIN_PATH],
         capture_output=True, text=True,
     )
     if res.returncode != 0:

@@ -122,7 +122,10 @@ AUTHENTICATION_BACKENDS = ["django.contrib.auth.backends.ModelBackend"]
 # I18N / static
 # ---------------------------------------------------------------------------
 LANGUAGE_CODE = "en"
-TIME_ZONE = "UTC"
+# Storage layer keeps all timestamps in UTC (USE_TZ=True). TIME_ZONE only
+# affects what humans see in the admin UI and what naive datetime literals
+# in code interpret as. Moscow time = UTC+3 with no DST since 2014.
+TIME_ZONE = "Europe/Moscow"
 USE_I18N = True
 USE_TZ = True
 
@@ -232,7 +235,7 @@ CELERY_BROKER_URL = env("CELERY_BROKER_URL", default="redis://localhost:6379/0")
 CELERY_RESULT_BACKEND = env("CELERY_RESULT_BACKEND", default="redis://localhost:6379/1")
 CELERY_TASK_ALWAYS_EAGER = env.bool("CELERY_TASK_ALWAYS_EAGER", default=False)
 CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
-CELERY_TIMEZONE = "UTC"
+CELERY_TIMEZONE = "Europe/Moscow"  # beat schedules read in MSK
 CELERY_TASK_ACKS_LATE = True
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
 
