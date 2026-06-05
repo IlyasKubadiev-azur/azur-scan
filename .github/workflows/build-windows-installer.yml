@@ -65,6 +65,17 @@ jobs:
         working-directory: agent
         run: python build/build.py
 
+      - name: Upload PyInstaller diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-debug-${{ steps.ver.outputs.version }}
+          path: |
+            agent/build/_pyinstaller_work/**/warn-*.txt
+            agent/build/_pyinstaller_work/**/xref-*.html
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Build setup.exe
         working-directory: agent
         run: pyinstaller installer/windows/installer.spec --noconfirm --clean --distpath dist --workpath build/_installer_work

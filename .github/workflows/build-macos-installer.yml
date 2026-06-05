@@ -64,7 +64,20 @@ jobs:
       # 4. Build the macOS binary + .pkg + .dmg
       # ---------------------------------------------------------------
       - name: Build .pkg and .dmg
-        run: bash agent/installer/macos/build.sh --version "${{ steps.ver.outputs.version }}"
+        run: bash -x agent/installer/macos/build.sh --version "${{ steps.ver.outputs.version }}"
+
+      # On failure: dump PyInstaller's warning log so we don't need to
+      # squint at the run output to figure out missing modules / hooks.
+      - name: Upload diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-debug-${{ steps.ver.outputs.version }}
+          path: |
+            agent/build/_pyinstaller_work/**/warn-*.txt
+            agent/build/_pyinstaller_work/**/xref-*.html
+          if-no-files-found: ignore
+          retention-days: 14
 
       # ---------------------------------------------------------------
       # 5. Upload as workflow artifacts (kept ~90 days, downloadable from
