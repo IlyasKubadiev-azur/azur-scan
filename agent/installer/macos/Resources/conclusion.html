@@ -2,18 +2,23 @@
 <html><head><meta charset="utf-8"></head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; padding: 12px; line-height: 1.5; color: #1d1d1f;">
   <h2 style="margin-top: 0;">Installation complete</h2>
-  <p>The agent is now installed and running as a system daemon.</p>
 
-  <h4>Point it at the backend</h4>
-  <p>Open Terminal and run:</p>
-  <pre style="background: #f5f5f7; padding: 10px 12px; border-radius: 6px; font-size: 12px;">sudo /usr/local/azurscan/bin/azurscan-agent set-config \
-     --server http://10.0.20.143:8000
-sudo launchctl kickstart -k system/com.azurscan.agent</pre>
+  <p>The agent is now installed, configured against the office backend, and
+  running as a system daemon.</p>
 
-  <p>The daemon will auto-register this Mac on the next start — no
-  enrollment token needed; the backend identifies the device by its stable
-  IOPlatformUUID.</p>
+  <p>This Mac will appear in the Azur-Scan admin panel within ~60 seconds.
+  No further action required.</p>
 
-  <p style="color: #6e6e73; font-size: 13px;">Logs:
-    <code>/Library/Logs/AzurScan/agent.log</code></p>
+  <h4 style="margin-top: 24px;">Where to look if something is wrong</h4>
+  <ul style="font-size: 13px; color: #4b4b4f;">
+    <li><strong>Logs:</strong> <code>/Library/Logs/AzurScan/agent.log</code></li>
+    <li><strong>Config:</strong> <code>/Library/Application Support/AzurScan/config.yaml</code></li>
+    <li><strong>Service status:</strong> <code>sudo launchctl print system/com.azurscan.agent</code></li>
+  </ul>
+
+  <p style="margin-top: 24px; font-size: 13px; color: #6e6e73;">
+    To point this Mac at a different backend later:
+    <code>sudo /usr/local/azurscan/bin/azurscan-agent set-config --server &lt;URL&gt;</code>
+    then <code>sudo launchctl kickstart -k system/com.azurscan.agent</code>.
+  </p>
 </body></html>

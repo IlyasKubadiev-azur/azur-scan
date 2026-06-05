@@ -1,15 +1,31 @@
 #!/bin/bash
 # Post-install script for the Azur-Scan Agent .pkg.
 #
-# Runs as root. Installs the LaunchDaemon plist and starts the service.
+# Runs as root. Does everything needed for a plug-and-play install:
+#   1. Sets up log + data directories with proper ACLs
+#   2. Auto-configures the agent with the office backend URL (no terminal step)
+#   3. Loads the LaunchDaemon — daemon auto-enrolls on first start
+#
+# Pre-existing config (from a previous install) is NOT overwritten: that way
+# laptops manually pointed at a different backend keep their settings on
+# upgrade.
 
 set -euo pipefail
+
+# =============================================================================
+# Office defaults. Change here + rebuild the .pkg if the backend moves.
+# Same value as DEFAULT_SERVER in the Windows GUI installer.
+# =============================================================================
+DEFAULT_SERVER_URL="http://10.0.2.30:8000"
 
 PLIST_SRC="/Library/LaunchDaemons/com.azurscan.agent.plist"
 LOG_DIR="/Library/Logs/AzurScan"
 DATA_DIR="/Library/Application Support/AzurScan"
+AGENT_BIN="/usr/local/azurscan/bin/azurscan-agent"
 
-# Ensure log + data directories exist with correct ownership
+# -----------------------------------------------------------------------------
+# Directories + permissions
+# -----------------------------------------------------------------------------
 mkdir -p "$LOG_DIR" "$DATA_DIR"
 chown -R root:wheel "$LOG_DIR" "$DATA_DIR"
 chmod 750 "$LOG_DIR" "$DATA_DIR"
@@ -21,23 +37,31 @@ if [ -f "$PLIST_SRC" ]; then
 fi
 
 # Make the binary executable (pkgbuild preserves bits, but be defensive)
-chmod 755 /usr/local/azurscan/bin/azurscan-agent
+chmod 755 "$AGENT_BIN"
 
-# Unload first if the daemon is already loaded (e.g., upgrade install)
+# -----------------------------------------------------------------------------
+# Auto-configure server URL — only if config doesn't already exist
+# -----------------------------------------------------------------------------
+if [ ! -f "$DATA_DIR/config.yaml" ]; then
+    echo "Writing default server URL: $DEFAULT_SERVER_URL"
+    "$AGENT_BIN" set-config --server "$DEFAULT_SERVER_URL"
+else
+    echo "Config already present at $DATA_DIR/config.yaml — leaving it as-is."
+fi
+
+# -----------------------------------------------------------------------------
+# Register and start the LaunchDaemon
+# -----------------------------------------------------------------------------
+# Unload first if the daemon is already loaded (upgrade install)
 launchctl bootout system "$PLIST_SRC" 2>/dev/null || true
 
-# Load and start
 launchctl bootstrap system "$PLIST_SRC"
 launchctl enable system/com.azurscan.agent
 launchctl kickstart -k system/com.azurscan.agent
 
-echo "Azur-Scan Agent installed and started."
 echo ""
-echo "Enrollment is tokenless — configure the server URL once, then the"
-echo "daemon auto-registers on first run:"
-echo ""
-echo "  sudo /usr/local/azurscan/bin/azurscan-agent set-config \\"
-echo "       --server http://10.0.20.143:8000"
-echo "  sudo launchctl kickstart -k system/com.azurscan.agent"
+echo "Azur-Scan Agent installed and running."
+echo "Server URL: $("$AGENT_BIN" status 2>/dev/null | awk -F'  +' '/^Server URL:/{print $2}')"
+echo "The device will appear in the admin panel within ~60 seconds."
 
 exit 0
