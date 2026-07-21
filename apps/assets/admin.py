@@ -22,24 +22,60 @@ class NetworkInterfaceInline(TabularInline):
     can_delete = False
 
 
+def _fmt_bytes(n: int | None) -> str:
+    """Render a byte count as a human-readable string.
+
+    Uses 1024-based units (GiB) but labels them GB/TB — this matches what
+    macOS Disk Utility, Windows Explorer and Ubuntu Files all display, so
+    users see the same number as their OS shows for the same disk.
+    """
+    if n is None:
+        return "—"
+    if n < 1024:
+        return f"{n} B"
+    for unit in ("KB", "MB", "GB", "TB", "PB"):
+        n /= 1024.0
+        if n < 1024:
+            return f"{n:.1f} {unit}"
+    return f"{n:.1f} EB"
+
+
 class DiskInline(TabularInline):
     model = Disk
     extra = 0
-    readonly_fields = ("device", "model", "size_bytes", "free_bytes", "fs_type", "mount_point", "updated_at")
+    fields = ("device", "model", "size_display", "free_display", "usage_display",
+              "fs_type", "mount_point")
+    readonly_fields = ("device", "model", "size_display", "free_display",
+                       "usage_display", "fs_type", "mount_point")
     can_delete = False
+
+    @admin.display(description="Size", ordering="size_bytes")
+    def size_display(self, obj):
+        return _fmt_bytes(obj.size_bytes)
+
+    @admin.display(description="Free", ordering="free_bytes")
+    def free_display(self, obj):
+        return _fmt_bytes(obj.free_bytes)
+
+    @admin.display(description="Used")
+    def usage_display(self, obj):
+        if not obj.size_bytes or not obj.free_bytes:
+            return "—"
+        used_pct = 100.0 * (obj.size_bytes - obj.free_bytes) / obj.size_bytes
+        return f"{used_pct:.0f}%"
 
 
 @admin.register(Asset)
 class AssetAdmin(ModelAdmin):
     list_display = (
         "hostname", "serial_number", "manufacturer", "model",
-        "os_display", "cpu_model", "current_owner", "status", "last_seen_at",
+        "os_display", "cpu_model", "current_owner_email", "status", "last_seen_at",
     )
     list_display_links = ("hostname", "serial_number")
     list_filter = ("status", "asset_type", "os_name", "cpu_vendor", "is_manual")
     search_fields = (
         "hostname", "fqdn", "serial_number", "manufacturer", "model",
-        "cpu_model", "bios_version",
+        "cpu_model", "bios_version", "current_owner_email",
     )
     readonly_fields = (
         "id", "first_seen_at", "last_seen_at", "agent_version",
@@ -89,7 +125,8 @@ class AssetAdmin(ModelAdmin):
             "fields": ("manufacturer", "model", "serial_number"),
         }),
         ("Users / ownership", {
-            "fields": ("current_user_login", "last_logged_user", "current_owner"),
+            "fields": ("current_user_login", "last_logged_user",
+                       "current_owner_email"),
         }),
         ("Service", {
             "fields": ("status", "first_seen_at", "last_seen_at", "agent_version"),
@@ -98,7 +135,7 @@ class AssetAdmin(ModelAdmin):
         ("Timestamps", {"fields": ("created_at", "updated_at")}),
     )
     inlines = [NetworkInterfaceInline, DiskInline]
-    autocomplete_fields = ("current_owner", "asset_type")
+    autocomplete_fields = ("asset_type",)
 
     # django-unfold detail-page action: renders as a button at the top of the
     # Asset edit page. Visible only on saved objects (not on the "Add" form).
@@ -156,5 +193,6 @@ class AssetAdmin(ModelAdmin):
 
 @admin.register(AssetOwnerHistory)
 class AssetOwnerHistoryAdmin(ModelAdmin):
-    list_display = ("asset", "user", "assigned_at", "unassigned_at", "assigned_by")
-    autocomplete_fields = ("asset", "user", "assigned_by")
+    list_display = ("asset", "owner_email", "assigned_at", "unassigned_at", "assigned_by")
+    search_fields = ("asset__hostname", "owner_email")
+    autocomplete_fields = ("asset", "assigned_by")

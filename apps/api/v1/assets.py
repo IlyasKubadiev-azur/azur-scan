@@ -54,7 +54,7 @@ class AssetViewSet(viewsets.ModelViewSet):
         serializer.instance = create_manual_asset(
             hostname=serializer.validated_data["hostname"],
             asset_type=serializer.validated_data.get("asset_type"),
-            owner=serializer.validated_data.get("current_owner"),
+            owner_email=serializer.validated_data.get("current_owner_email", ""),
             notes=serializer.validated_data.get("notes", ""),
         )
 
@@ -90,14 +90,8 @@ class AssetViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="set-owner")
     def set_owner(self, request, pk=None):
-        from apps.accounts.models import User
+        """Assign an owner by email string. Pass "" to clear."""
         asset = self.get_object()
-        user_id = request.data.get("user_id")
-        new_owner = User.objects.filter(pk=user_id).first() if user_id else None
-        if user_id and new_owner is None:
-            return Response(
-                {"error": {"code": "user_not_found"}},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-        reassign_owner(asset=asset, new_owner=new_owner, actor=request.user)
+        email = (request.data.get("email") or "").strip()
+        reassign_owner(asset=asset, new_owner_email=email, actor=request.user)
         return Response(AssetSerializer(asset).data)

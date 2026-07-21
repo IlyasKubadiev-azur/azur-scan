@@ -286,44 +286,6 @@ LOGGING = {
 
 
 # ---------------------------------------------------------------------------
-# LDAP (opt-in via env)
-# ---------------------------------------------------------------------------
-LDAP_ENABLED = env.bool("LDAP_ENABLED", default=False)
-if LDAP_ENABLED:
-    import ldap
-    from django_auth_ldap.config import ActiveDirectoryGroupType, LDAPSearch
-
-    AUTHENTICATION_BACKENDS = [
-        "django_auth_ldap.backend.LDAPBackend",
-        "django.contrib.auth.backends.ModelBackend",
-    ]
-    AUTH_LDAP_SERVER_URI = env("AUTH_LDAP_SERVER_URI")
-    AUTH_LDAP_BIND_DN = env("AUTH_LDAP_BIND_DN")
-    AUTH_LDAP_BIND_PASSWORD = env("AUTH_LDAP_BIND_PASSWORD")
-    AUTH_LDAP_USER_SEARCH = LDAPSearch(
-        env("AUTH_LDAP_USER_SEARCH_BASE"),
-        ldap.SCOPE_SUBTREE,
-        "(sAMAccountName=%(user)s)",
-    )
-    AUTH_LDAP_GROUP_SEARCH = LDAPSearch(
-        env("AUTH_LDAP_GROUP_SEARCH_BASE"),
-        ldap.SCOPE_SUBTREE,
-        "(objectClass=group)",
-    )
-    AUTH_LDAP_GROUP_TYPE = ActiveDirectoryGroupType()
-    AUTH_LDAP_USER_ATTR_MAP = {
-        "first_name": "givenName",
-        "last_name": "sn",
-        "email": "mail",
-    }
-    AUTH_LDAP_USER_FLAGS_BY_GROUP = {
-        "is_staff": env("AUTH_LDAP_OPERATORS_GROUP_DN", default=""),
-        "is_superuser": env("AUTH_LDAP_ADMINS_GROUP_DN", default=""),
-    }
-    AUTH_LDAP_CACHE_TIMEOUT = 300
-
-
-# ---------------------------------------------------------------------------
 # Security
 # ---------------------------------------------------------------------------
 SESSION_COOKIE_HTTPONLY = True

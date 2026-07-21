@@ -9,7 +9,7 @@ from apps.assets.models import Asset
 def list_assets() -> QuerySet[Asset]:
     return (
         Asset.objects
-        .select_related("asset_type", "current_owner")
+        .select_related("asset_type")
         .prefetch_related("network_interfaces", "disks")
         .order_by("-last_seen_at", "hostname")
     )

@@ -8,22 +8,23 @@ from apps.assets.models import Asset, AssetOwnerHistory
 
 
 @transaction.atomic
-def reassign_owner(*, asset: Asset, new_owner, actor) -> Asset:
-    """Set/replace the current owner and append a row to the history."""
+def reassign_owner(*, asset: Asset, new_owner_email: str, actor) -> Asset:
+    """Set the current owner (by email string) and append a row to history."""
     now = timezone.now()
+    new_owner_email = (new_owner_email or "").strip().lower()
 
     # Close out the previous owner record (if any)
     AssetOwnerHistory.objects.filter(
         asset=asset, unassigned_at__isnull=True,
     ).update(unassigned_at=now)
 
-    asset.current_owner = new_owner
-    asset.save(update_fields=["current_owner", "updated_at"])
+    asset.current_owner_email = new_owner_email
+    asset.save(update_fields=["current_owner_email", "updated_at"])
 
-    if new_owner is not None:
+    if new_owner_email:
         AssetOwnerHistory.objects.create(
             asset=asset,
-            user=new_owner,
+            owner_email=new_owner_email,
             assigned_at=now,
             assigned_by=actor if getattr(actor, "is_authenticated", False) else None,
         )
@@ -31,17 +32,20 @@ def reassign_owner(*, asset: Asset, new_owner, actor) -> Asset:
 
 
 @transaction.atomic
-def create_manual_asset(*, hostname: str, asset_type=None, owner=None, notes: str = "") -> Asset:
+def create_manual_asset(
+    *, hostname: str, asset_type=None, owner_email: str = "", notes: str = "",
+) -> Asset:
+    owner_email = (owner_email or "").strip().lower()
     asset = Asset.objects.create(
         hostname=hostname,
         asset_type=asset_type,
-        current_owner=owner,
+        current_owner_email=owner_email,
         notes=notes,
         is_manual=True,
         status=Asset.Status.UNKNOWN,
     )
-    if owner is not None:
+    if owner_email:
         AssetOwnerHistory.objects.create(
-            asset=asset, user=owner, assigned_at=timezone.now(),
+            asset=asset, owner_email=owner_email, assigned_at=timezone.now(),
         )
     return asset

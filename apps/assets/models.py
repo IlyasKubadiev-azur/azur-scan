@@ -70,10 +70,10 @@ class Asset(UUIDPKModel, TimeStampedModel):
     # Users
     current_user_login = models.CharField(max_length=128, blank=True, default="")
     last_logged_user = models.CharField(max_length=128, blank=True, default="")
-    current_owner = models.ForeignKey(
-        "accounts.User", on_delete=models.SET_NULL,
-        null=True, blank=True, related_name="owned_assets",
-    )
+    # Free-form email — operator types who owns this device. Not tied to any
+    # user account: we removed the AD/LDAP integration since it was more
+    # ceremony than value for this workflow.
+    current_owner_email = models.EmailField(blank=True, default="", db_index=True)
 
     # Service metadata
     status = models.CharField(
@@ -108,7 +108,7 @@ class Asset(UUIDPKModel, TimeStampedModel):
 
 class AssetOwnerHistory(TimeStampedModel):
     asset = models.ForeignKey(Asset, on_delete=models.CASCADE, related_name="owner_history")
-    user = models.ForeignKey("accounts.User", on_delete=models.PROTECT, related_name="+")
+    owner_email = models.EmailField(blank=True, default="")
     assigned_at = models.DateTimeField()
     unassigned_at = models.DateTimeField(null=True, blank=True)
     assigned_by = models.ForeignKey(

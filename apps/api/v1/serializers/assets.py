@@ -58,7 +58,7 @@ class AssetSerializer(serializers.ModelSerializer):
             # BIOS
             "bios_vendor", "bios_version", "bios_release_date",
             # Users
-            "current_user_login", "last_logged_user", "current_owner",
+            "current_user_login", "last_logged_user", "current_owner_email",
             # Service
             "status", "first_seen_at", "last_seen_at", "agent_version",
             "is_manual", "notes",
@@ -98,7 +98,7 @@ class AssetCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Asset
-        fields = ["hostname", "fqdn", "asset_type_id", "current_owner", "notes"]
+        fields = ["hostname", "fqdn", "asset_type_id", "current_owner_email", "notes"]
 
 
 class ScanSessionListSerializer(serializers.ModelSerializer):
