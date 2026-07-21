@@ -56,6 +56,7 @@ class AssetViewSet(viewsets.ModelViewSet):
             asset_type=serializer.validated_data.get("asset_type"),
             owner_email=serializer.validated_data.get("current_owner_email", ""),
             notes=serializer.validated_data.get("notes", ""),
+            actor=self.request.user,
         )
 
     @action(detail=True, methods=["post"], url_path="rescan")

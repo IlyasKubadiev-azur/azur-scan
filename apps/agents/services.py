@@ -17,6 +17,7 @@ from rest_framework.exceptions import APIException, NotFound
 from apps.agents.models import Agent, AgentCommand
 from apps.agents.tokens import sign_agent_jwt
 from apps.assets.models import Asset
+from apps.core import audit
 
 
 class EnrollmentError(APIException):
@@ -26,17 +27,19 @@ class EnrollmentError(APIException):
 
 
 @transaction.atomic
-def enroll_agent(*, fingerprint: dict) -> dict:
+def enroll_agent(*, fingerprint: dict, request=None) -> dict:
     """Register a machine and issue agent credentials.
 
     Idempotent on `machine_id` — an existing record is updated and gets fresh
     JTIs; previously issued tokens immediately become invalid.
+    `request` is passed for audit-log IP/user-agent capture only.
     """
     machine_id = fingerprint.get("machine_id")
     if not machine_id:
         raise EnrollmentError(detail="machine_id_required")
 
     existing = Agent.objects.select_for_update().filter(machine_id=machine_id).first()
+    is_reenroll = existing is not None
 
     if existing:
         agent = existing
@@ -79,6 +82,19 @@ def enroll_agent(*, fingerprint: dict) -> dict:
     agent.enrolled_at = timezone.now()
     agent.save()
 
+    audit.log_event(
+        action=audit.AGENT_REENROLLED if is_reenroll else audit.AGENT_ENROLLED,
+        object_type="agent",
+        object_id=agent.id,
+        request=request,
+        after={
+            "hostname": agent.asset.hostname,
+            "machine_id": machine_id,
+            "os_kind": agent.os_kind,
+            "agent_version": agent.agent_version,
+        },
+    )
+
     return {
         "device_id": str(agent.id),
         "access_token": access_token,
@@ -91,13 +107,21 @@ def enroll_agent(*, fingerprint: dict) -> dict:
 
 
 def issue_rescan_command(*, agent: Agent, requested_by, params: dict | None = None) -> AgentCommand:
-    return AgentCommand.objects.create(
+    cmd = AgentCommand.objects.create(
         agent=agent,
         type=AgentCommand.Type.RESCAN,
         params=params or {},
         expires_at=timezone.now() + timedelta(hours=24),
         created_by=requested_by if getattr(requested_by, "is_authenticated", False) else None,
     )
+    audit.log_event(
+        action=audit.COMMAND_RESCAN,
+        actor=requested_by,
+        object_type="asset",
+        object_id=agent.asset_id,
+        after={"command_id": str(cmd.id), "hostname": agent.asset.hostname},
+    )
+    return cmd
 
 
 @transaction.atomic
@@ -137,6 +161,12 @@ def acknowledge_command(*, agent: Agent, command_id, result: dict | None = None)
     if result is not None:
         cmd.result = result
     cmd.save(update_fields=["status", "acked_at", "result", "updated_at"])
+    audit.log_event(
+        action=audit.COMMAND_ACKED,
+        object_type="asset",
+        object_id=agent.asset_id,
+        after={"command_id": str(cmd.id), "type": cmd.type, "result": result or {}},
+    )
     return cmd
 
 
@@ -150,4 +180,12 @@ def revoke_agent(*, agent: Agent, reason: str = "manual_revocation") -> Agent:
         "is_revoked", "revoked_at", "revoked_reason",
         "jwt_jti", "refresh_jti", "updated_at",
     ])
+    audit.log_event(
+        action=audit.AGENT_REVOKED,
+        object_type="agent",
+        object_id=agent.id,
+        before={"is_revoked": False},
+        after={"is_revoked": True, "reason": reason,
+               "hostname": agent.asset.hostname},
+    )
     return agent

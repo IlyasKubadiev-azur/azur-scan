@@ -14,6 +14,7 @@ from django.utils import timezone
 
 from apps.agents.models import Agent
 from apps.assets.models import Asset, Disk, NetworkInterface
+from apps.core import audit
 from apps.scanning.models import ScanSession
 from apps.scanning.schemas import ScanPayload
 
@@ -51,6 +52,19 @@ def ingest_scan(
 
     session.ingest_duration_ms = int((time.monotonic() - started) * 1000)
     session.save()
+
+    audit.log_event(
+        action=audit.SCAN_RECEIVED,
+        object_type="asset",
+        object_id=agent.asset_id,
+        after={
+            "scan_id": payload.scan_id,
+            "hostname": agent.asset.hostname,
+            "source": source,
+            "agent_version": payload.agent_version,
+            "ingest_ms": session.ingest_duration_ms,
+        },
+    )
     return session
 
 
@@ -107,19 +121,30 @@ def _apply_to_asset(asset: Asset, payload: ScanPayload) -> None:
     asset.status = Asset.Status.ONLINE
     asset.save()
 
-    # Network interfaces — replace state
+    # Network interfaces — replace state.
+    # Dedupe by mac_address: macOS routinely reports the same MAC on multiple
+    # logical interfaces (en0 + bridge0 + awdl0 + llw0 all share the Wi-Fi
+    # hardware MAC) and Linux does the same for bonded/VLAN devices. The
+    # (asset, mac_address) UNIQUE constraint enforces one row per physical
+    # NIC, so we keep the first occurrence and drop later dupes.
     asset.network_interfaces.all().delete()
     if payload.network.interfaces:
-        NetworkInterface.objects.bulk_create([
-            NetworkInterface(
+        seen_macs: set[str] = set()
+        nics_to_create: list[NetworkInterface] = []
+        for nic in payload.network.interfaces:
+            mac = (nic.mac_address or "").upper()
+            if not mac or mac in seen_macs:
+                continue
+            seen_macs.add(mac)
+            nics_to_create.append(NetworkInterface(
                 asset=asset,
                 name=nic.name,
-                mac_address=nic.mac_address,
+                mac_address=mac,
                 ip_addresses=nic.ip_addresses,
                 is_primary=nic.is_primary,
-            )
-            for nic in payload.network.interfaces
-        ])
+            ))
+        if nics_to_create:
+            NetworkInterface.objects.bulk_create(nics_to_create)
 
     # Disks — replace state
     asset.disks.all().delete()

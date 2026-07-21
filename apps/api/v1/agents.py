@@ -47,7 +47,10 @@ from apps.scanning.services import ingest_scan
 def enroll(request):
     serializer = EnrollmentRequestSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
-    result = enroll_agent(fingerprint=serializer.validated_data["fingerprint"])
+    result = enroll_agent(
+        fingerprint=serializer.validated_data["fingerprint"],
+        request=request,
+    )
     return Response(
         EnrollmentResponseSerializer(result).data,
         status=status.HTTP_201_CREATED,
