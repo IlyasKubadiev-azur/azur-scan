@@ -1,0 +1,54 @@
+#!/bin/bash
+# Pre-install script for the Azur-Scan Agent .pkg.
+#
+# Runs BEFORE the installer copies new files. Job is to guarantee we're
+# not overwriting a live binary and that no leftover daemon will race
+# with the newly-installed one.
+#
+# Sequence:
+#   1. Ask launchd nicely to stop the daemon (bootout)
+#   2. Wait up to 10s for the child process to exit cleanly
+#   3. Force-kill anything still running
+#   4. Remove the old plist file so postinstall can bootstrap fresh
+#
+# Never fails the install: every command is guarded with `|| true` so a
+# missing/broken previous install doesn't block a fresh one.
+
+set -u
+
+PLIST="/Library/LaunchDaemons/com.azurscan.agent.plist"
+LABEL="com.azurscan.agent"
+BIN="/usr/local/azurscan/bin/azurscan-agent"
+
+echo "azurscan preinstall: checking for existing daemon..."
+
+# 1. Bootout the daemon (unregister from launchd)
+if [ -f "$PLIST" ]; then
+    launchctl bootout system "$PLIST" 2>/dev/null || true
+fi
+
+# 2. Give the child process up to 10s to exit
+for i in $(seq 1 10); do
+    if ! pgrep -f 'azurscan-agent run' >/dev/null 2>&1; then
+        break
+    fi
+    sleep 1
+done
+
+# 3. Force-kill anything that's still running (SIGKILL — no fs writes possible)
+if pgrep -f 'azurscan-agent run' >/dev/null 2>&1; then
+    echo "azurscan preinstall: agent still running, sending SIGKILL"
+    pkill -9 -f 'azurscan-agent run' 2>/dev/null || true
+    sleep 1
+fi
+
+# 4. Remove old plist. postinstall will drop a fresh one.
+rm -f "$PLIST"
+
+# 5. Belt-and-braces: get rid of the physical binary path so pkgbuild's
+#    file replacement can't race a still-open file handle on some
+#    old macOS releases.
+rm -f "$BIN"
+
+echo "azurscan preinstall: done, ready for fresh install"
+exit 0

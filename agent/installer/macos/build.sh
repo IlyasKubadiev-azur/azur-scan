@@ -89,8 +89,9 @@ chmod 755 "$PAYLOAD_DIR/usr/local/azurscan/bin/azurscan-agent"
 cp "$INSTALLER_DIR/com.azurscan.agent.plist" "$PAYLOAD_DIR/Library/LaunchDaemons/"
 chmod 644 "$PAYLOAD_DIR/Library/LaunchDaemons/com.azurscan.agent.plist"
 
+cp "$INSTALLER_DIR/preinstall"  "$SCRIPTS_DIR/preinstall"
 cp "$INSTALLER_DIR/postinstall" "$SCRIPTS_DIR/postinstall"
-chmod 755 "$SCRIPTS_DIR/postinstall"
+chmod 755 "$SCRIPTS_DIR/preinstall" "$SCRIPTS_DIR/postinstall"
 
 # Optionally sign the binary
 if [ -n "$SIGN_APP" ]; then

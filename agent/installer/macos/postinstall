@@ -50,14 +50,24 @@ else
 fi
 
 # -----------------------------------------------------------------------------
-# Register and start the LaunchDaemon
+# Register and start the LaunchDaemon.
+#
+# preinstall already booted-out any previous daemon and killed leftover
+# processes, so bootstrap here starts from a clean state. Still guard the
+# bootout with `|| true` in case someone re-ran postinstall manually.
 # -----------------------------------------------------------------------------
-# Unload first if the daemon is already loaded (upgrade install)
 launchctl bootout system "$PLIST_SRC" 2>/dev/null || true
 
 launchctl bootstrap system "$PLIST_SRC"
 launchctl enable system/com.azurscan.agent
 launchctl kickstart -k system/com.azurscan.agent
+
+# Verify the daemon is actually running — surfaces a real error to the
+# installer UI if launchd rejected the plist for any reason.
+sleep 2
+if ! launchctl print system/com.azurscan.agent 2>/dev/null | grep -q 'state = running'; then
+    echo "WARNING: daemon did not reach 'running' state — check /Library/Logs/AzurScan/"
+fi
 
 echo ""
 echo "Azur-Scan Agent installed and running."
