@@ -15,6 +15,32 @@ from functools import lru_cache
 
 @lru_cache(maxsize=1)
 def hostname() -> str:
+    """Human-readable device name reported to the backend.
+
+    macOS has THREE distinct names:
+      - ComputerName  (friendly, e.g. "Ilya's MacBook Air") — what the user
+        sets in System Settings > General > About > Name
+      - HostName      (network DNS name, e.g. "azurpc-781.azur.local")
+      - LocalHostName (Bonjour name)
+
+    We prefer ComputerName because that's what operators actually recognise
+    when browsing the admin. If it's empty or scutil fails, we fall back
+    to the network hostname.
+
+    Windows and Linux only have one name (via socket.gethostname()) — same
+    as it always was.
+    """
+    if sys.platform == "darwin":
+        try:
+            result = subprocess.run(
+                ["scutil", "--get", "ComputerName"],
+                capture_output=True, text=True, timeout=5, check=True,
+            )
+            name = result.stdout.strip()
+            if name:
+                return name
+        except (subprocess.SubprocessError, FileNotFoundError):
+            pass
     return socket.gethostname()
 
 
