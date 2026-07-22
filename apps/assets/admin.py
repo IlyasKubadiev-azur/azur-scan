@@ -159,9 +159,12 @@ class AssetAdmin(ModelAdmin):
     def rescan_now(self, request, object_id: str):
         """Queue an immediate rescan command for this asset's agent.
 
-        Routed at /admin/assets/asset/<pk>/rescan-now/. The action button is
-        rendered by django-unfold on the detail page (top toolbar).
+        Routed at /admin/assets/asset/<pk>/rescan-now/. Redirects back to the
+        asset list — that's where the operator can see the whole fleet's
+        `last_seen_at` update as scans start rolling in.
         """
+        from django.conf import settings
+
         asset = self.get_object(request, object_id)
         if asset is None:
             messages.error(request, "Asset not found.")
@@ -171,24 +174,26 @@ class AssetAdmin(ModelAdmin):
         if agent is None:
             messages.warning(
                 request,
-                f"{asset.hostname}: no enrolled agent on this device, nothing to rescan.",
+                f"{asset.hostname}: no enrolled agent on this device — "
+                "nothing to rescan.",
             )
         elif agent.is_revoked:
             messages.warning(
                 request,
-                f"{asset.hostname}: agent is revoked — re-enroll required before rescan.",
+                f"{asset.hostname}: agent is revoked — re-enroll required "
+                "before rescan.",
             )
         else:
-            cmd = issue_rescan_command(agent=agent, requested_by=request.user)
+            issue_rescan_command(agent=agent, requested_by=request.user)
+            hb = getattr(settings, "AGENT_HEARTBEAT_INTERVAL_S", 15)
             messages.success(
                 request,
-                f"{asset.hostname}: rescan queued (command {cmd.id}). "
-                f"The agent will pick it up on the next heartbeat "
-                f"(within ~{agent.asset.agent_version and 90 or 90}s).",
+                f"{asset.hostname}: rescan queued. "
+                f"The device will pick up the command within ~{hb} seconds, "
+                f"run a full scan, and upload fresh data. "
+                f"Refresh the page in ~30-60 sec to see updated fields.",
             )
-        return redirect(
-            "admin:assets_asset_change", object_id=str(asset.id),
-        )
+        return redirect("admin:assets_asset_changelist")
 
 
 @admin.register(AssetOwnerHistory)

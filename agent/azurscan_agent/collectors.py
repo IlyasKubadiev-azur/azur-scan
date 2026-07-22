@@ -231,9 +231,29 @@ def _cpu_base_ghz() -> float | None:
 
 
 def _cpu_model() -> str:
+    """Human-readable CPU model, e.g. "Intel(R) Core(TM) Ultra 7 255H".
+
+    Windows path uses WMI's Win32_Processor.Name — the classic `wmic` CLI
+    was removed in Windows 11 24H2 and 2024 Server, so subprocess fallback
+    to platform.processor() gave things like
+    "Intel64 Family 6 Model 197 Stepping 2, GenuineIntel" — a chip ID string,
+    not a marketing name. WMI still works everywhere.
+    """
     if sys.platform == "win32":
+        # Preferred: WMI COM object (works on every supported Windows).
         try:
-            return _wmic("cpu", "get", "name").strip()
+            import wmi  # from the `wmi` package + pywin32
+            for p in wmi.WMI().Win32_Processor():
+                name = (p.Name or "").strip()
+                if name:
+                    return name
+        except Exception:
+            pass
+        # Legacy fallback for boxes without pywin32 for some reason
+        try:
+            out = _wmic("cpu", "get", "name").strip()
+            if out and "Intel64" not in out and "Family" not in out:
+                return out
         except Exception:
             pass
     if sys.platform == "darwin":
@@ -244,6 +264,8 @@ def _cpu_model() -> str:
             ).stdout.strip()
         except Exception:
             pass
+    # Last-resort: platform.processor() returns "Intel64 Family ..." on
+    # Windows — better than nothing but not what a human wants to read.
     return platform.processor() or ""
 
 

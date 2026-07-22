@@ -36,9 +36,13 @@
       property propagate from the user session into the deferred (elevated)
       CustomAction below.
     -->
-    <Property Id="SERVER_URL" Secure="yes" />
-    <Launch Condition='Installed OR (SERVER_URL AND SERVER_URL &lt;&gt; "")'
-            Message='SERVER_URL must be provided. Run install-azurscan.cmd or pass SERVER_URL="http://host:8000" to msiexec.' />
+    <!--
+      Baked-in default URL — makes a plain double-click on the .msi work
+      out of the box. Override via `msiexec /i ... SERVER_URL="…"` for
+      SCCM/Intune rollouts pointing at a different backend, or use
+      install-azurscan.cmd which prompts interactively.
+    -->
+    <Property Id="SERVER_URL" Secure="yes" Value="http://10.0.2.30:8000" />
 
     <MajorUpgrade DowngradeErrorMessage="A newer version of Azur-Scan Agent is already installed." />
 
